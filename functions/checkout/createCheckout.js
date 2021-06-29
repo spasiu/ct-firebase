@@ -7,18 +7,23 @@ exports.createCheckout = functions.https.onCall((data, context) => {
     throw new functions.https.HttpsError("invalid-auth", "Must be logged in.");
   }
 
-  const {products, first_name, last_name, address} = data;
+  const {
+    products,
+    first_name: firstName,
+    last_name: lastName,
+    address,
+  } = data;
 
   const bcCreateCartOptions = {
     url: `${bigCommerceConfig.url}/carts`,
     method: "POST",
     headers: {
-      "Accept": "application/json",
+      Accept: "application/json",
       "Content-Type": "application/json",
       "X-Auth-Client": bigCommerceConfig.clientId,
       "X-Auth-Token": bigCommerceConfig.accessToken,
     },
-    data: {line_items: products},
+    data: { line_items: products },
   };
 
   return axios(bcCreateCartOptions).then((response) => {
@@ -34,7 +39,7 @@ exports.createCheckout = functions.https.onCall((data, context) => {
       url: `${bigCommerceConfig.url}/checkouts/${cartId}/consignments?includes=consignments.available_shipping_options`,
       method: "POST",
       headers: {
-        "Accept": "application/json",
+        Accept: "application/json",
         "Content-Type": "application/json",
         "X-Auth-Client": bigCommerceConfig.clientId,
         "X-Auth-Token": bigCommerceConfig.accessToken,
@@ -43,8 +48,8 @@ exports.createCheckout = functions.https.onCall((data, context) => {
         {
           line_items: consignmentLineItems,
           shipping_address: {
-            first_name,
-            last_name,
+            first_name: firstName,
+            last_name: lastName,
             email: context.auth.token.email,
             address1: address.line1,
             address2: address.line2,
@@ -61,13 +66,13 @@ exports.createCheckout = functions.https.onCall((data, context) => {
       const consignmentId = shippingResponse.data.data.consignments[0].id;
       const shippingOptionId =
         shippingResponse.data.data.consignments[0].available_shipping_options[0]
-            .id;
+          .id;
 
       const bcGetShippingOptions = {
         url: `${bigCommerceConfig.url}/checkouts/${cartId}/consignments/${consignmentId}`,
         method: "PUT",
         headers: {
-          "Accept": "application/json",
+          Accept: "application/json",
           "Content-Type": "application/json",
           "X-Auth-Client": bigCommerceConfig.clientId,
           "X-Auth-Token": bigCommerceConfig.accessToken,

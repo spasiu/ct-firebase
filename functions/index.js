@@ -1,12 +1,11 @@
-const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
 
 module.exports = {
-  // Product
+  // Products
   ...require("./products/createBreakProducts"),
 
   // Cart
-  ...require("./checkout/createCheckout")
+  ...require("./checkout/createCheckout"),
 };
