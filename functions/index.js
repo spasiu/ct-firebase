@@ -8,4 +8,8 @@ module.exports = {
 
   // Cart
   ...require("./checkout/createCheckout"),
+  ...require("./checkout/addItem"),
+  ...require("./checkout/removeItem"),
+  ...require("./checkout/updateItem"),
+  ...require("./checkout/getCheckout"),
 };
