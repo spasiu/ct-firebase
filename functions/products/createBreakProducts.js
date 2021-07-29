@@ -1,6 +1,7 @@
 const functions = require("firebase-functions");
 const axios = require("axios");
 const bigCommerceConfig = require("../config/bigCommerce");
+const hasuraConfig = require("../config/hasura");
 
 // TODO: Move BC config to env vars
 
@@ -14,7 +15,10 @@ const ADD_BREAK_PRODUCT_ITEMS = `
 
 exports.createBreakProducts = functions.https.onCall((data, context) => {
   if (!context.auth) {
-    throw new functions.https.HttpsError("invalid-auth", "Must be logged in.");
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Must be logged in."
+    );
   }
 
   const { breakData, lineItems } = data;
@@ -85,7 +89,7 @@ exports.createBreakProducts = functions.https.onCall((data, context) => {
     }));
 
     const ctRequestOptions = {
-      url: "https://ct-admin-dev.hasura.app/v1/graphql",
+      url: hasuraConfig.url,
       method: "POST",
       headers: {
         Accept: "application/json",

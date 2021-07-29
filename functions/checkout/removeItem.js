@@ -4,7 +4,10 @@ const bigCommerceConfig = require("../config/bigCommerce");
 
 exports.removeItem = functions.https.onCall((data, context) => {
   if (!context.auth) {
-    throw new functions.https.HttpsError("invalid-auth", "Must be logged in.");
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Must be logged in."
+    );
   }
 
   const { cartId, itemId } = data;
