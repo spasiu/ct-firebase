@@ -3,7 +3,7 @@ const admin = require("firebase-admin");
 const axios = require("axios");
 const paysafeConfig = require("../config/paysafe");
 
-exports.getCards = functions.https.onCall((data, context) => {
+exports.removeCard = functions.https.onCall((data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError(
       "failed-precondition",
