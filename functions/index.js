@@ -22,4 +22,5 @@ module.exports = {
   ...require("./checkout/updateItem"),
   ...require("./checkout/getCheckout"),
   ...require("./checkout/createOrder"),
+  ...require("./checkout/addAddress"),
 };
