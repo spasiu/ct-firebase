@@ -4,6 +4,7 @@ const bigCommerceConfig = require("../config/bigCommerce");
 const hasuraConfig = require("../config/hasura");
 
 // TODO: Move BC config to env vars
+// TODO: Verify admin/manager/breaker
 
 const ADD_BREAK_PRODUCT_ITEMS = `
   mutation AddBreakProductItems($products: [BreakProductItems_insert_input!]!) {
@@ -42,9 +43,7 @@ exports.createBreakProducts = functions.https.onCall((data, context) => {
     variants.push({
       sku: `${breakData.id}-SPOT-${i + 1}`,
       inventory_level: 1,
-      price: hasLineItems
-        ? lineItems[i].cost
-        : breakData.price,
+      price: hasLineItems ? lineItems[i].cost : breakData.price,
       option_values: [
         {
           option_display_name: "Spot",
@@ -81,9 +80,7 @@ exports.createBreakProducts = functions.https.onCall((data, context) => {
       title: hasLineItems ? lineItems[idx].value : `Spot ${idx + 1}`,
       quantity: 1,
       break_id: breakData.id,
-      price: hasLineItems
-        ? variant.price
-        : breakData.price,
+      price: hasLineItems ? variant.price : breakData.price,
       bc_product_id: variant.product_id,
       bc_variant_id: variant.id,
     }));

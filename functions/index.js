@@ -6,6 +6,7 @@ module.exports = {
   // User
   ...require("./user/onUserCreate"),
   ...require("./user/createBigCommerceUser"),
+  ...require("./user/userUpdatePermissions"),
 
   // Cards
   ...require("./cards/addCard"),

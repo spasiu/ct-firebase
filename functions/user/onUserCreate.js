@@ -22,6 +22,27 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
   let profileRequest;
 
   /**
+   * Setup custom claims
+   */
+  const customClaims = {
+    "https://hasura.io/jwt/claims": {
+      "x-hasura-default-role": "user",
+      "x-hasura-allowed-roles": ["user"],
+      "x-hasura-user-id": uid,
+    },
+  };
+
+  // Set claims
+  try {
+    await admin.auth().setCustomUserClaims(uid, customClaims);
+  } catch (e) {
+    throw new functions.https.HttpsError(
+      "internal",
+      "Could not update user claims"
+    );
+  }
+
+  /**
    * Create Paysafe profile for user
    */
   const psCreateProfileOptions = {
@@ -77,7 +98,7 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
       query: INSERT_HASURA_USER,
       variables: {
         userId: uid,
-        email
+        email,
       },
     },
   };
