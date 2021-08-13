@@ -1,8 +1,10 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
+const crypto = require("crypto");
 const paysafeConfig = require("../config/paysafe");
 const hasuraConfig = require("../config/hasura");
+const intercomConfig = require("../config/intercom");
 
 const INSERT_HASURA_USER = `
   mutation InsertHasuraUser($userId: String!, $email: String!) {
@@ -67,12 +69,25 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
   }
 
   /**
-   * Add Paysafe profile to user doc
+   * Create user verification for Intercom
+   */
+  const hmacIOS = crypto.createHmac("sha256", intercomConfig.IOSSecret);
+  hmacIOS.update(uid);
+  const hmacIOSHash = hmacIOS.digest("hex");
+
+  const hmacAndroid = crypto.createHmac("sha256", intercomConfig.AndroidSecret);
+  hmacAndroid.update(uid);
+  const hmacAndroidHash = hmacAndroid.digest("hex");
+
+  /**
+   * Add Paysafe profile and Intercom verification to user doc
    */
   try {
     await admin.firestore().collection("Users").doc(uid).set(
       {
         paysafeProfileId: profileRequest.data.id,
+        intercomIOS: hmacIOSHash,
+        intercomAndroid: hmacAndroidHash,
       },
       { merge: true }
     );
