@@ -1,4 +1,4 @@
 module.exports = {
-  IOSSecret: "EXFKKXfRvDv8gZLpp8yTyBGpnICethvxPrhyypyZ",
-  AndroidSecret: "lafCnRHOdXn4lv_E5OBg1SR_k0uOFHmU5GARiuG0",
+  IOSSecret: "vVPo7LzwTtyI5Ny_lH976VCakrb4hm2uFVf3HB2D",
+  AndroidSecret: "u3EI99qHBYxZTPrQBJmprUy5SM5FrIGx9v5R5Ryn",
 };
