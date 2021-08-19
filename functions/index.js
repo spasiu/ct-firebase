@@ -24,4 +24,7 @@ module.exports = {
   ...require("./checkout/getCheckout"),
   ...require("./checkout/createOrder"),
   ...require("./checkout/addAddress"),
+
+  // Video & Streams
+  ...require("./video/muxWebhook"),
 };

@@ -24,18 +24,13 @@ exports.createBreakProducts = functions.https.onCall((data, context) => {
 
   const { breakData, lineItems } = data;
 
-  if (breakData.break_type === "HIT_DRAFT") {
-    return "Pending";
-  }
-
   let bigCommerceProduct;
 
   const hasLineItems =
-    breakData.break_type === "RANDOM_TEAM" ||
-    breakData.break_type === "RANDOM_DIVISION" ||
-    breakData.break_type === "PERSONAL"
-      ? false
-      : true;
+    breakData.break_type === "PICK_YOUR_TEAM" ||
+    breakData.break_type === "PICK_YOUR_DIVISION"
+      ? true
+      : false;
 
   let variants = [];
 
