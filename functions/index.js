@@ -15,6 +15,7 @@ module.exports = {
 
   // Products
   ...require("./products/createBreakProducts"),
+  ...require("./products/startBreak"),
 
   // Cart
   ...require("./checkout/createCheckout"),
