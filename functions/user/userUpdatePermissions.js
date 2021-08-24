@@ -98,6 +98,7 @@ exports.userUpdatePermissions = functions.https.onCall(
               playback_policy: "public",
               new_asset_settings: { playback_policy: "public" },
               reconnect_window: 15,
+              reduced_latency: true,
             });
 
           await admin.firestore().collection("Breakers").doc(uid).set(
