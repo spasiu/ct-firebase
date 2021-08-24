@@ -97,9 +97,10 @@ exports.userUpdatePermissions = functions.https.onCall(
             await muxClient.Video.LiveStreams.create({
               playback_policy: "public",
               new_asset_settings: { playback_policy: "public" },
-              reconnect_window: 15,
               reduced_latency: true,
             });
+
+          console.log(muxLiveStreamResponse);
 
           await admin.firestore().collection("Breakers").doc(uid).set(
             {
