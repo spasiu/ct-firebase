@@ -54,11 +54,8 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   const uid = context.auth.uid;
   const orderId = uuidv4();
 
-  let bcCheckoutRequest,
-    bcCreateOrderRequest,
-    ctProductItemsRequest,
-    bcOrderId;
-    
+  let bcCheckoutRequest, bcCreateOrderRequest, ctProductItemsRequest, bcOrderId;
+
   /**
    * Get User's cart
    */
