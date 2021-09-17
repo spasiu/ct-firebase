@@ -100,8 +100,6 @@ exports.userUpdatePermissions = functions.https.onCall(
               reduced_latency: true,
             });
 
-          console.log(muxLiveStreamResponse);
-
           await admin.firestore().collection("Breakers").doc(uid).set(
             {
               muxStreamId: muxLiveStreamResponse.id,

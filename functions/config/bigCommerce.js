@@ -1,9 +1,9 @@
 module.exports = {
-  storeHash: "f9rgvzdpi1",
-  url: "https://api.bigcommerce.com/stores/f9rgvzdpi1/v3",
-  urlV2: "https://api.bigcommerce.com/stores/f9rgvzdpi1/v2",
-  clientId: "1764tf23c0iizgxj6fs0yfjmjfivhc4",
+  storeHash: "yds2ii0pks",
+  url: "https://api.bigcommerce.com/stores/yds2ii0pks/v3",
+  urlV2: "https://api.bigcommerce.com/stores/yds2ii0pks/v2",
+  clientId: "hfk89hoo0uiyw2std6vol06znmq3cyf",
   clientSecret:
-    "87c12659a41965a50a953402a8ec18289bb0f14b1e847b14ce956af4b382ca3d",
-  accessToken: "ho3asoph55n0fbxnfheo7zk1vi82rzu",
+    "805e1168e4c66772e11dd8e52abcf0d571584077c8bfbeefccd9871ed310cf36",
+  accessToken: "mof927qefvrbgocgjpe5118cxxxyd9y",
 };
