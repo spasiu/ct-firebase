@@ -5,12 +5,30 @@ const bigCommerceConfig = require("../config/bigCommerce");
 const hasuraConfig = require("../config/hasura");
 const paysafeConfig = require("../config/paysafe");
 
-const GET_BREAK_PRODUCT_ITEMS_FOR_ORDER = `
-  query GetBreakProductItemsForOrder($lineItems: [BreakProductItems_bool_exp!]) {
-    BreakProductItems(where: {
-      _or: $lineItems
-    }) {
-      id
+const GET_AND_RESERVE_BREAK_PRODUCT_ITEMS_FOR_ORDER = `
+  mutation GetAndReserveBreakProductItemsForOrder(
+    $lineItems: [BreakProductItems_bool_exp!]
+  ) {
+    update_BreakProductItems(
+      where: { _or: $lineItems }
+      _inc: { quantity: -1 }
+    ) {
+      returning {
+        id
+      }
+    }
+  }
+`;
+
+const UNDO_ITEM_RESERVATION = `
+  mutation UndoBreakProductItemReservation(
+    $lineItems: [BreakProductItems_bool_exp!]
+  ) {
+    update_BreakProductItems(
+      where: { _or: $lineItems }
+      _inc: { quantity: 1 }
+    ) {
+      affected_rows
     }
   }
 `;
@@ -33,7 +51,7 @@ const INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS = `
 
     update_BreakProductItems(
       where: { _or: $breakLineItems }
-      _set: { order_id: $orderId, quantity: 0 }
+      _set: { order_id: $orderId }
     ) {
       returning {
         id
@@ -73,7 +91,8 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   try {
     bcCheckoutRequest = await axios(bcGetCheckoutOptions);
   } catch (e) {
-    console.log(e.response);
+    functions.logger.log(e.response);
+
     throw new functions.https.HttpsError(
       "internal",
       "Could not get checkout from BigCommerce"
@@ -100,7 +119,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
       "Content-Type": "application/json",
     },
     data: {
-      query: GET_BREAK_PRODUCT_ITEMS_FOR_ORDER,
+      query: GET_AND_RESERVE_BREAK_PRODUCT_ITEMS_FOR_ORDER,
       variables: {
         lineItems: breakQueryProductInput,
       },
@@ -110,17 +129,42 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   try {
     ctProductItemsRequest = await axios(ctProductItemsQueryOptions);
   } catch (e) {
-    console.log(e.response);
+    functions.logger.log(e.response);
+
     throw new functions.https.HttpsError(
       "internal",
       "Could not get items from Cards & Treasure database"
     );
   }
 
-  const ctBreakProductItems = ctProductItemsRequest.data.data.BreakProductItems;
+  /**
+   * Create Undo query
+   */
+  const ctUndoProductItemsReservationQueryOptions = {
+    url: hasuraConfig.url,
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    data: {
+      query: UNDO_ITEM_RESERVATION,
+      variables: {
+        lineItems: breakQueryProductInput,
+      },
+    },
+  };
+
+  /**
+   * Verify products exist in cart and in our database
+   */
+  const ctBreakProductItems =
+    ctProductItemsRequest.data.data.update_BreakProductItems.returning;
 
   // Ensure number of break product items available in our databae matches length of BC line items
   if (ctBreakProductItems.length !== breakQueryProductInput.length) {
+    await axios(ctUndoProductItemsReservationQueryOptions);
+
     throw new functions.https.HttpsError(
       "internal",
       "Checkout items do not match available break items"
@@ -157,7 +201,10 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   try {
     axios(psMakePaymentOptions);
   } catch (e) {
-    console.log(e.response);
+    functions.logger.log(e.response);
+
+    await axios(ctUndoProductItemsReservationQueryOptions);
+
     throw new functions.https.HttpsError(
       "internal",
       "Could not complete PaySafe payment"
@@ -182,7 +229,10 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     bcCreateOrderRequest = await axios(bcCreateOrderOptions);
     bcOrderId = bcCreateOrderRequest.data.data.id;
   } catch (e) {
-    console.log(e.response);
+    functions.logger.log(e.response);
+
+    await axios(ctUndoProductItemsReservationQueryOptions);
+
     throw new functions.https.HttpsError(
       "internal",
       "Could not create BigCommerce order"
@@ -210,7 +260,10 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   try {
     await axios(bcUpdateOrderToPendingOptions);
   } catch (e) {
-    console.log(e.response);
+    functions.logger.log(e.response);
+
+    await axios(ctUndoProductItemsReservationQueryOptions);
+
     throw new functions.https.HttpsError(
       "internal",
       "Could not update BigCommerce payment method and status"
@@ -249,7 +302,10 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   try {
     await axios(ctCreateOrderOptions);
   } catch (e) {
-    console.log(e.response);
+    functions.logger.log(e.response);
+
+    await axios(ctUndoProductItemsReservationQueryOptions);
+
     throw new functions.https.HttpsError(
       "internal",
       "Could not create order in our database"

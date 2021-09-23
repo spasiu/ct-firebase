@@ -17,6 +17,9 @@ const INSERT_HASURA_USER = `
   }
 `;
 
+/**
+ * TODO: Insert Paysafe ID to Hasura
+ */
 exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
   const uid = user.uid;
   const email = user.email;
