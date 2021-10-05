@@ -8,6 +8,7 @@ admin.initializeApp();
 module.exports = {
   // User
   ...require("./user/onUserCreate"),
+  ...require("./user/onUserDelete"),
   ...require("./user/createBigCommerceUser"),
   ...require("./user/userUpdatePermissions"),
 
