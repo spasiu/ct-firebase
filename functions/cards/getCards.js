@@ -1,7 +1,6 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
-const paysafeConfig = require("../config/paysafe");
 
 exports.getCards = functions.https.onCall((data, context) => {
   if (!context.auth) {
@@ -29,23 +28,31 @@ exports.getCards = functions.https.onCall((data, context) => {
          * Get cards
          */
         const psGetCardsOptions = {
-          url: `${paysafeConfig.url}/customervault/v1/profiles/${firestoreUserDoc.paysafeProfileId}?fields=cards`,
+          url: `${
+            functions.config().env.paysafe.url
+          }/customervault/v1/profiles/${
+            firestoreUserDoc.paysafeProfileId
+          }?fields=cards`,
           method: "GET",
           headers: {
-            Authorization: `Basic ${paysafeConfig.serverToken}`,
+            Authorization: `Basic ${
+              functions.config().env.paysafe.serverToken
+            }`,
             "Content-Type": "application/json",
           },
         };
 
-        return axios(psGetCardsOptions).then(cards => {
-          return cards.data;
-        }).catch(e => {
-          console.log(e.response);
-          throw new functions.https.HttpsError(
-            "internal",
-            "Could not fetch cards"
-          );
-        })
+        return axios(psGetCardsOptions)
+          .then((cards) => {
+            return cards.data;
+          })
+          .catch((e) => {
+            console.log(e.response);
+            throw new functions.https.HttpsError(
+              "internal",
+              "Could not fetch cards"
+            );
+          });
       } else {
         throw new functions.https.HttpsError(
           "failed-precondition",

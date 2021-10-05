@@ -1,7 +1,6 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
-const paysafeConfig = require("../config/paysafe");
 
 exports.removeCard = functions.https.onCall((data, context) => {
   if (!context.auth) {
@@ -31,10 +30,16 @@ exports.removeCard = functions.https.onCall((data, context) => {
          * Remove card
          */
         const psRemoveCardOptions = {
-          url: `${paysafeConfig.url}/customervault/v1/profiles/${firestoreUserDoc.paysafeProfileId}/cards/${cardId}`,
+          url: `${
+            functions.config().env.paysafe.url
+          }/customervault/v1/profiles/${
+            firestoreUserDoc.paysafeProfileId
+          }/cards/${cardId}`,
           method: "DELETE",
           headers: {
-            Authorization: `Basic ${paysafeConfig.serverToken}`,
+            Authorization: `Basic ${
+              functions.config().env.paysafe.serverToken
+            }`,
             "Content-Type": "application/json",
           },
         };

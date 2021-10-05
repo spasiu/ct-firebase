@@ -67,3 +67,6 @@ node_modules/
 
 # key file
 candt-admin-dev-key.json
+
+# local runtime env config
+.runtimeconfig.json

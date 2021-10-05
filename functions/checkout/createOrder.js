@@ -1,9 +1,6 @@
 const functions = require("firebase-functions");
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
-const bigCommerceConfig = require("../config/bigCommerce");
-const hasuraConfig = require("../config/hasura");
-const paysafeConfig = require("../config/paysafe");
 
 const GET_AND_RESERVE_BREAK_PRODUCT_ITEMS_FOR_ORDER = `
   mutation GetAndReserveBreakProductItemsForOrder(
@@ -78,13 +75,13 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
    * Get User's cart
    */
   const bcGetCheckoutOptions = {
-    url: `${bigCommerceConfig.url}/checkouts/${cartId}`,
+    url: `${functions.config().env.bigCommerce.url}/checkouts/${cartId}`,
     method: "GET",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      "X-Auth-Client": bigCommerceConfig.clientId,
-      "X-Auth-Token": bigCommerceConfig.accessToken,
+      "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+      "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
     },
   };
 
@@ -112,7 +109,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
    * Get break product line items from our database
    */
   const ctProductItemsQueryOptions = {
-    url: hasuraConfig.url,
+    url: functions.config().env.hasura.url,
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -141,7 +138,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
    * Create Undo query
    */
   const ctUndoProductItemsReservationQueryOptions = {
-    url: hasuraConfig.url,
+    url: functions.config().env.hasura.url,
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -175,10 +172,12 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
    * Process payment
    */
   const psMakePaymentOptions = {
-    url: `${paysafeConfig.url}/cardpayments/v1/accounts/${paysafeConfig.accountId}/auths`,
+    url: `${functions.config().env.paysafe.url}/cardpayments/v1/accounts/${
+      functions.config().env.paysafe.accountId
+    }/auths`,
     method: "POST",
     headers: {
-      Authorization: `Basic ${paysafeConfig.serverToken}`,
+      Authorization: `Basic ${functions.config().env.paysafe.serverToken}`,
       "Content-Type": "application/json",
     },
     data: {
@@ -215,13 +214,13 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
    * Create BC order
    */
   const bcCreateOrderOptions = {
-    url: `${bigCommerceConfig.url}/checkouts/${cartId}/orders`,
+    url: `${functions.config().env.bigCommerce.url}/checkouts/${cartId}/orders`,
     method: "POST",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      "X-Auth-Client": bigCommerceConfig.clientId,
-      "X-Auth-Token": bigCommerceConfig.accessToken,
+      "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+      "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
     },
   };
 
@@ -243,13 +242,13 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
    * Update BC order and set payment to external, and status to pending
    */
   const bcUpdateOrderToPendingOptions = {
-    url: `${bigCommerceConfig.urlV2}/orders/${bcOrderId}`,
+    url: `${functions.config().env.bigCommerce.urlV2}/orders/${bcOrderId}`,
     method: "PUT",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      "X-Auth-Client": bigCommerceConfig.clientId,
-      "X-Auth-Token": bigCommerceConfig.accessToken,
+      "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+      "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
     },
     data: {
       payment_method: "Cards & Treasure App",
@@ -274,7 +273,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
    * Create Hasura Order
    */
   const ctCreateOrderOptions = {
-    url: hasuraConfig.url,
+    url: functions.config().env.hasura.url,
     method: "POST",
     headers: {
       Accept: "application/json",

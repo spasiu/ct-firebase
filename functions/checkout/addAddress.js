@@ -1,6 +1,5 @@
 const functions = require("firebase-functions");
 const axios = require("axios");
-const bigCommerceConfig = require("../config/bigCommerce");
 
 exports.addAddress = functions.https.onCall((data, context) => {
   if (!context.auth) {
@@ -13,13 +12,13 @@ exports.addAddress = functions.https.onCall((data, context) => {
   const { cartId, firstName, lastName, address } = data;
 
   const bcGetCheckoutOptions = {
-    url: `${bigCommerceConfig.url}/checkouts/${cartId}`,
+    url: `${functions.config().env.bigCommerce.url}/checkouts/${cartId}`,
     method: "GET",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      "X-Auth-Client": bigCommerceConfig.clientId,
-      "X-Auth-Token": bigCommerceConfig.accessToken,
+      "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+      "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
     },
   };
 
@@ -33,13 +32,15 @@ exports.addAddress = functions.https.onCall((data, context) => {
       }));
 
     const bcGetShippingOptions = {
-      url: `${bigCommerceConfig.url}/checkouts/${cartId}/consignments?includes=consignments.available_shipping_options`,
+      url: `${
+        functions.config().env.bigCommerce.url
+      }/checkouts/${cartId}/consignments?includes=consignments.available_shipping_options`,
       method: "POST",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        "X-Auth-Client": bigCommerceConfig.clientId,
-        "X-Auth-Token": bigCommerceConfig.accessToken,
+        "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+        "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
       },
       data: [
         {
@@ -66,13 +67,15 @@ exports.addAddress = functions.https.onCall((data, context) => {
           .id;
 
       const bcSetShippingOptions = {
-        url: `${bigCommerceConfig.url}/checkouts/${cartId}/consignments/${consignmentId}`,
+        url: `${
+          functions.config().env.bigCommerce.url
+        }/checkouts/${cartId}/consignments/${consignmentId}`,
         method: "PUT",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          "X-Auth-Client": bigCommerceConfig.clientId,
-          "X-Auth-Token": bigCommerceConfig.accessToken,
+          "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+          "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
         },
         data: {
           shipping_option_id: shippingOptionId,
@@ -81,13 +84,15 @@ exports.addAddress = functions.https.onCall((data, context) => {
 
       return axios(bcSetShippingOptions).then(() => {
         const bcSetBillingAddress = {
-          url: `${bigCommerceConfig.url}/checkouts/${cartId}/billing-address`,
+          url: `${
+            functions.config().env.bigCommerce.url
+          }/checkouts/${cartId}/billing-address`,
           method: "POST",
           headers: {
             Accept: "application/json",
             "Content-Type": "application/json",
-            "X-Auth-Client": bigCommerceConfig.clientId,
-            "X-Auth-Token": bigCommerceConfig.accessToken,
+            "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+            "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
           },
           data: {
             first_name: firstName,

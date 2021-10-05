@@ -1,0 +1,29 @@
+{
+  "env": {
+    "bigCommerce": {
+      "storeHash": "<STORE HASH>",
+      "url": "<V3 API URL>",
+      "urlV2": "<V2 API URL>",
+      "clientId": "<CLIENT ID>",
+      "clientSecret": "<CLIENT SECRET>",
+      "accessToken": "<ACCESS TOKEN>"
+    },
+    "hasura": {
+      "url": "<ENDPOINT URL>",
+      "adminSecret": "<ADMIN SECRET>"
+    },
+    "intercom": {
+      "IOSSecret": "<IOS SECRET>",
+      "AndroidSecret": "<ANDROID SECRET>"
+    },
+    "mux": {
+      "token": "<TOKEN>",
+      "secret": "<SECRET>"
+    },
+    "paysafe": {
+      "serverToken": "<SERVER TOKEN>",
+      "accountId": "<ACCOUNT ID>",
+      "url": "<URL>"
+    }
+  }
+}

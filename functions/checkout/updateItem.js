@@ -1,6 +1,5 @@
 const functions = require("firebase-functions");
 const axios = require("axios");
-const bigCommerceConfig = require("../config/bigCommerce");
 
 exports.updateItem = functions.https.onCall((data, context) => {
   if (!context.auth) {
@@ -13,13 +12,15 @@ exports.updateItem = functions.https.onCall((data, context) => {
   const { cartId, itemId, item } = data;
 
   const bcUpdateItemOptions = {
-    url: `${bigCommerceConfig.url}/carts/${cartId}/items/${itemId}`,
+    url: `${
+      functions.config().env.bigCommerce.url
+    }/carts/${cartId}/items/${itemId}`,
     method: "PUT",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      "X-Auth-Client": bigCommerceConfig.clientId,
-      "X-Auth-Token": bigCommerceConfig.accessToken,
+      "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+      "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
     },
     data: { line_item: item },
   };

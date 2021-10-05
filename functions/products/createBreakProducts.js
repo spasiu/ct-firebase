@@ -1,7 +1,5 @@
 const functions = require("firebase-functions");
 const axios = require("axios");
-const bigCommerceConfig = require("../config/bigCommerce");
-const hasuraConfig = require("../config/hasura");
 
 // TODO: Move BC config to env vars
 // TODO: Verify admin/manager/breaker
@@ -59,13 +57,13 @@ exports.createBreakProducts = functions.https.onCall((data, context) => {
   };
 
   const bcRequestOptions = {
-    url: `${bigCommerceConfig.url}/catalog/products`,
+    url: `${functions.config().env.bigCommerce.url}/catalog/products`,
     method: "POST",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      "X-Auth-Client": bigCommerceConfig.clientId,
-      "X-Auth-Token": bigCommerceConfig.accessToken,
+      "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+      "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
     },
     data: bigCommerceProduct,
   };
@@ -81,7 +79,7 @@ exports.createBreakProducts = functions.https.onCall((data, context) => {
     }));
 
     const ctRequestOptions = {
-      url: hasuraConfig.url,
+      url: functions.config().env.hasura.url,
       method: "POST",
       headers: {
         Accept: "application/json",

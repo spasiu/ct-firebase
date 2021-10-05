@@ -2,16 +2,14 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
 const crypto = require("crypto");
-const paysafeConfig = require("../config/paysafe");
-const hasuraConfig = require("../config/hasura");
-const intercomConfig = require("../config/intercom");
+const { gql } = require("graphql-request");
 
-const INSERT_HASURA_USER = `
-  mutation InsertHasuraUser($userId: String!, $email: String!) {
-    insert_Users_one(object: {
-      id: $userId,
-      email: $email
-    }) {
+const GraphQLClient = require("../graphql/client");
+const APPROVED_ADMINS = require("../config/admins");
+
+const INSERT_HASURA_USER = gql`
+  mutation InsertHasuraUser($userId: String!, $email: String!, $role: String!) {
+    insert_Users_one(object: { id: $userId, email: $email }) {
       id
     }
   }
@@ -29,7 +27,7 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
   /**
    * Setup custom claims
    */
-  const customClaims = {
+  let customClaims = {
     "https://hasura.io/jwt/claims": {
       "x-hasura-default-role": "user",
       "x-hasura-allowed-roles": ["user"],
@@ -37,10 +35,21 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
     },
   };
 
+  if (APPROVED_ADMINS.includes(email)) {
+    customClaims = {
+      "https://hasura.io/jwt/claims": {
+        "x-hasura-default-role": "admin",
+        "x-hasura-allowed-roles": ["user", "manager", "admin"],
+        "x-hasura-user-id": uid,
+      },
+    };
+  }
+
   // Set claims
   try {
     await admin.auth().setCustomUserClaims(uid, customClaims);
   } catch (e) {
+    functions.logger.log(e);
     throw new functions.https.HttpsError(
       "internal",
       "Could not update user claims"
@@ -51,12 +60,12 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
    * Create Paysafe profile for user
    */
   const psCreateProfileOptions = {
-    url: `${paysafeConfig.url}/customervault/v1/profiles`,
+    url: `${functions.config().env.paysafe.url}/customervault/v1/profiles`,
     method: "POST",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      Authorization: `Basic ${paysafeConfig.serverToken}`,
+      Authorization: `Basic ${functions.config().env.paysafe.serverToken}`,
     },
     data: { merchantCustomerId: `${uid}-${Date.now()}`, locale: "en_US" },
   };
@@ -64,21 +73,28 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
   try {
     profileRequest = await axios(psCreateProfileOptions);
   } catch (e) {
-    console.log(e.response);
+    functions.logger.log(e.response.data);
     throw new functions.https.HttpsError(
       "internal",
-      "Could not create paysafe profile"
+      "Could not create paysafe profile",
+      e.response.data
     );
   }
 
   /**
    * Create user verification for Intercom
    */
-  const hmacIOS = crypto.createHmac("sha256", intercomConfig.IOSSecret);
+  const hmacIOS = crypto.createHmac(
+    "sha256",
+    functions.config().env.intercom.IOSSecret
+  );
   hmacIOS.update(uid);
   const hmacIOSHash = hmacIOS.digest("hex");
 
-  const hmacAndroid = crypto.createHmac("sha256", intercomConfig.AndroidSecret);
+  const hmacAndroid = crypto.createHmac(
+    "sha256",
+    functions.config().env.intercom.AndroidSecret
+  );
   hmacAndroid.update(uid);
   const hmacAndroidHash = hmacAndroid.digest("hex");
 
@@ -91,11 +107,12 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
         paysafeProfileId: profileRequest.data.id,
         intercomIOS: hmacIOSHash,
         intercomAndroid: hmacAndroidHash,
+        refreshToken: admin.database.ServerValue.TIMESTAMP,
       },
       { merge: true }
     );
   } catch (e) {
-    console.log(e.response);
+    functions.logger.log(e);
     throw new functions.https.HttpsError(
       "internal",
       "Could not save details to user's profile"
@@ -105,29 +122,18 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
   /**
    * Creater user in Hasura
    */
-  const ctInsertHasuraUserOptions = {
-    url: hasuraConfig.url,
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    data: {
-      query: INSERT_HASURA_USER,
-      variables: {
-        userId: uid,
-        email,
-      },
-    },
-  };
-
   try {
-    await axios(ctInsertHasuraUserOptions);
+    await GraphQLClient.request(INSERT_HASURA_USER, {
+      userId: uid,
+      email,
+      role: APPROVED_ADMINS.includes(email) ? "ADMIN" : "USER",
+    });
   } catch (e) {
-    console.log(e.response);
+    functions.logger.log(e);
     throw new functions.https.HttpsError(
       "internal",
-      "Could not create user in our database"
+      "Could not create user in our database",
+      e
     );
   }
 

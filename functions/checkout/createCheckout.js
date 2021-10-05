@@ -1,7 +1,6 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
-const bigCommerceConfig = require("../config/bigCommerce");
 
 exports.createCheckout = functions.https.onCall((data, context) => {
   if (!context.auth) {
@@ -30,13 +29,13 @@ exports.createCheckout = functions.https.onCall((data, context) => {
         } = data;
 
         const bcCreateCartOptions = {
-          url: `${bigCommerceConfig.url}/carts`,
+          url: `${functions.config().env.bigCommerce.url}/carts`,
           method: "POST",
           headers: {
             Accept: "application/json",
             "Content-Type": "application/json",
-            "X-Auth-Client": bigCommerceConfig.clientId,
-            "X-Auth-Token": bigCommerceConfig.accessToken,
+            "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+            "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
           },
           data: {
             customer_id: firestoreUserDoc.bcUserId,
@@ -56,13 +55,15 @@ exports.createCheckout = functions.https.onCall((data, context) => {
               }));
 
             const bcGetShippingOptions = {
-              url: `${bigCommerceConfig.url}/checkouts/${cartId}/consignments?includes=consignments.available_shipping_options`,
+              url: `${
+                functions.config().env.bigCommerce.url
+              }/checkouts/${cartId}/consignments?includes=consignments.available_shipping_options`,
               method: "POST",
               headers: {
                 Accept: "application/json",
                 "Content-Type": "application/json",
-                "X-Auth-Client": bigCommerceConfig.clientId,
-                "X-Auth-Token": bigCommerceConfig.accessToken,
+                "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+                "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
               },
               data: [
                 {
@@ -90,13 +91,16 @@ exports.createCheckout = functions.https.onCall((data, context) => {
                   .available_shipping_options[0].id;
 
               const bcSetShippingOptions = {
-                url: `${bigCommerceConfig.url}/checkouts/${cartId}/consignments/${consignmentId}`,
+                url: `${
+                  functions.config().env.bigCommerce.url
+                }/checkouts/${cartId}/consignments/${consignmentId}`,
                 method: "PUT",
                 headers: {
                   Accept: "application/json",
                   "Content-Type": "application/json",
-                  "X-Auth-Client": bigCommerceConfig.clientId,
-                  "X-Auth-Token": bigCommerceConfig.accessToken,
+                  "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+                  "X-Auth-Token":
+                    functions.config().env.bigCommerce.accessToken,
                 },
                 data: {
                   shipping_option_id: shippingOptionId,
@@ -105,13 +109,17 @@ exports.createCheckout = functions.https.onCall((data, context) => {
 
               return axios(bcSetShippingOptions).then(() => {
                 const bcSetBillingAddress = {
-                  url: `${bigCommerceConfig.url}/checkouts/${cartId}/billing-address`,
+                  url: `${
+                    functions.config().env.bigCommerce.url
+                  }/checkouts/${cartId}/billing-address`,
                   method: "POST",
                   headers: {
                     Accept: "application/json",
                     "Content-Type": "application/json",
-                    "X-Auth-Client": bigCommerceConfig.clientId,
-                    "X-Auth-Token": bigCommerceConfig.accessToken,
+                    "X-Auth-Client":
+                      functions.config().env.bigCommerce.clientId,
+                    "X-Auth-Token":
+                      functions.config().env.bigCommerce.accessToken,
                   },
                   data: {
                     first_name: firstName,
@@ -134,13 +142,15 @@ exports.createCheckout = functions.https.onCall((data, context) => {
           } else {
             // If no address, return checkout
             const bcGetCheckoutOptions = {
-              url: `${bigCommerceConfig.url}/checkouts/${cartId}`,
+              url: `${
+                functions.config().env.bigCommerce.url
+              }/checkouts/${cartId}`,
               method: "GET",
               headers: {
                 Accept: "application/json",
                 "Content-Type": "application/json",
-                "X-Auth-Client": bigCommerceConfig.clientId,
-                "X-Auth-Token": bigCommerceConfig.accessToken,
+                "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+                "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
               },
             };
 

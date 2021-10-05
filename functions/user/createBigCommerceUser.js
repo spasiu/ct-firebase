@@ -1,11 +1,21 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
-const bigCommerceConfig = require("../config/bigCommerce");
+const { gql } = require("graphql-request");
 
-/**
- * TODO: Add big commerce user ID to Hasura as well
- */
+const GraphQLClient = require("../graphql/client");
+
+const UPDATE_BC_ID = gql`
+  mutation UpdateBigCommerceId($userId: String!, $bcId: Int!) {
+    update_Users_by_pk(
+      pk_columns: { id: $userId }
+      _set: { bc_user_id: $bcId }
+    ) {
+      id
+    }
+  }
+`;
+
 exports.createBigCommerceUser = functions.https.onCall(
   async (data, context) => {
     if (!context.auth) {
@@ -23,13 +33,13 @@ exports.createBigCommerceUser = functions.https.onCall(
     let bcUserRequest;
 
     const bcCreateUseOptions = {
-      url: `${bigCommerceConfig.urlV2}/customers`,
+      url: `${functions.config().env.bigCommerce.urlV2}/customers`,
       method: "POST",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        "X-Auth-Client": bigCommerceConfig.clientId,
-        "X-Auth-Token": bigCommerceConfig.accessToken,
+        "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+        "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
       },
       data: {
         email: email,
@@ -41,7 +51,7 @@ exports.createBigCommerceUser = functions.https.onCall(
     try {
       bcUserRequest = await axios(bcCreateUseOptions);
     } catch (e) {
-      console.log(e.response);
+      functions.logger.log(e.response);
       throw new functions.https.HttpsError(
         "internal",
         "Could not create BigCommerce account"
@@ -56,10 +66,23 @@ exports.createBigCommerceUser = functions.https.onCall(
         { merge: true }
       );
     } catch (e) {
-      console.log(e.response);
+      functions.logger.log(e.response);
       throw new functions.https.HttpsError(
         "internal",
         "Could not save details to user's profile"
+      );
+    }
+
+    try {
+      await GraphQLClient.request(UPDATE_BC_ID, {
+        userId: uid,
+        bcId: bcUserRequest.data.id,
+      });
+    } catch (e) {
+      functions.logger.log(e);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Could not save details to user's profile in database"
       );
     }
 

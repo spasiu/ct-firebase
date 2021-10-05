@@ -1,6 +1,5 @@
 const functions = require("firebase-functions");
 const axios = require("axios");
-const hasuraConfig = require("../config/hasura");
 const shuffleArray = require("../utils/shuffleArray");
 
 const GET_BREAK_DETAILS_FOR_LIVE = `
@@ -9,6 +8,7 @@ const GET_BREAK_DETAILS_FOR_LIVE = `
       id
       dataset
       break_type
+      teams_per_spot
       BreakProductItems(where: { order_id: { _is_null:false } }) {
         id
         title
@@ -55,7 +55,7 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
    * Get break data for randomization
    */
   const ctGetBreakDetailsOptions = {
-    url: hasuraConfig.url,
+    url: functions.config().env.hasura.url,
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -87,7 +87,7 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
   }
 
   if (breakType === "HIT_DRAFT") {
-    users = shuffleArray(
+    users = await shuffleArray(
       breakData.BreakProductItems.map((item) => ({
         user_id: item.Order.User.id,
         username: item.Order.User.username,
@@ -97,9 +97,9 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
   }
 
   if (breakType === "RANDOM_DIVISION" || breakType === "RANDOM_TEAM") {
-    dataset = shuffleArray(breakData.dataset);
+    dataset = await shuffleArray(breakData.dataset);
 
-    users = shuffleArray(
+    users = await shuffleArray(
       breakData.BreakProductItems.map((item) => ({
         user_id: item.Order.User.id,
         username: item.Order.User.username,
@@ -108,9 +108,11 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
       }))
     );
 
-    dataset.forEach((item, idx) => {
-      users[idx % users.length].items.push(item.value);
-    });
+    for (let idx = 0; idx < users.length; idx++) {
+      for (let j = 0; j < breakData.teams_per_spot; j++) {
+        users[idx].items.push(dataset.shift());
+      }
+    }
   }
 
   if (breakType === "PICK_YOUR_DIVISION" || breakType === "PICK_YOUR_TEAM") {
@@ -126,7 +128,7 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
    * Set break randomization results
    */
   const ctSetBreakResultsOptions = {
-    url: hasuraConfig.url,
+    url: functions.config().env.hasura.url,
     method: "POST",
     headers: {
       Accept: "application/json",

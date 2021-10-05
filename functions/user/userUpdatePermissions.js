@@ -2,8 +2,6 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
 const mux = require("@mux/mux-node");
-const hasuraConfig = require("../config/hasura");
-const muxConfig = require("../config/mux");
 
 const UPDATE_USER = `
   mutation UpdateUserPermissions($id: String!, $data: Users_set_input!) {
@@ -89,10 +87,28 @@ exports.userUpdatePermissions = functions.https.onCall(
         );
       }
 
+      // Set refresh token time
+      try {
+        await admin.firestore().collection("Users").doc(uid).set(
+          {
+            refreshToken: admin.database.ServerValue.TIMESTAMP,
+          },
+          { merge: true }
+        );
+      } catch (e) {
+        throw new functions.https.HttpsError(
+          "internal",
+          "Could not update refresh token time."
+        );
+      }
+
       // Create stream if this user is a breaker
       if (setBreaker) {
         try {
-          const muxClient = new mux(muxConfig.token, muxConfig.secret);
+          const muxClient = new mux(
+            functions.config().env.mux.token,
+            functions.config().env.mux.secret
+          );
           const muxLiveStreamResponse =
             await muxClient.Video.LiveStreams.create({
               playback_policy: "public",
@@ -110,7 +126,7 @@ exports.userUpdatePermissions = functions.https.onCall(
 
           // Add stream data to Hasura
           const ctCreateStreamOptions = {
-            url: hasuraConfig.url,
+            url: functions.config().env.hasura.url,
             method: "POST",
             headers: {
               Accept: "application/json",
@@ -142,7 +158,7 @@ exports.userUpdatePermissions = functions.https.onCall(
 
       // Set role in Hasura
       const ctUpdateUserOptions = {
-        url: hasuraConfig.url,
+        url: functions.config().env.hasura.url,
         method: "POST",
         headers: {
           Accept: "application/json",

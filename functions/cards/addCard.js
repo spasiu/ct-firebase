@@ -1,7 +1,6 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
-const paysafeConfig = require("../config/paysafe");
 
 exports.addCard = functions.https.onCall((data, context) => {
   if (!context.auth) {
@@ -31,10 +30,16 @@ exports.addCard = functions.https.onCall((data, context) => {
          * Verify card token
          */
         const psVerifyCardOptions = {
-          url: `${paysafeConfig.url}/cardpayments/v1/accounts/${paysafeConfig.accountId}/verifications`,
+          url: `${
+            functions.config().env.paysafe.url
+          }/cardpayments/v1/accounts/${
+            functions.config().env.paysafe.accountId
+          }/verifications`,
           method: "POST",
           headers: {
-            Authorization: `Basic ${paysafeConfig.serverToken}`,
+            Authorization: `Basic ${
+              functions.config().env.paysafe.serverToken
+            }`,
             "Content-Type": "application/json",
           },
           data: {
@@ -55,15 +60,21 @@ exports.addCard = functions.https.onCall((data, context) => {
              * Add card to vault if verified
              */
             const psAddCardOptions = {
-              url: `${paysafeConfig.url}/customervault/v1/profiles/${firestoreUserDoc.paysafeProfileId}/cards`,
+              url: `${
+                functions.config().env.paysafe.url
+              }/customervault/v1/profiles/${
+                firestoreUserDoc.paysafeProfileId
+              }/cards`,
               method: "POST",
               headers: {
-                Authorization: `Basic ${paysafeConfig.serverToken}`,
+                Authorization: `Basic ${
+                  functions.config().env.paysafe.serverToken
+                }`,
                 "Content-Type": "application/json",
               },
               data: {
                 singleUseToken,
-                accountId: paysafeConfig.accountId,
+                accountId: functions.config().env.paysafe.accountId,
               },
             };
 
