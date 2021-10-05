@@ -1,6 +1,17 @@
 const functions = require("firebase-functions");
-const admin = require("firebase-admin");
 const axios = require("axios");
+
+const { gql } = require("graphql-request");
+
+const GraphQLClient = require("../graphql/client");
+
+const GET_USER_PAYSAFE_ID = gql`
+  query GetUserPaysafeId($userId: String!) {
+    Users_by_pk(id: $userId) {
+      paysafe_user_id
+    }
+  }
+`;
 
 exports.addCard = functions.https.onCall((data, context) => {
   if (!context.auth) {
@@ -17,15 +28,9 @@ exports.addCard = functions.https.onCall((data, context) => {
   /**
    * Get user doc
    */
-  return admin
-    .firestore()
-    .collection("Users")
-    .doc(uid)
-    .get()
-    .then((doc) => {
-      if (doc.exists) {
-        const firestoreUserDoc = doc.data();
-
+  return GraphQLClient.request(GET_USER_PAYSAFE_ID, { userId: uid }).then(
+    (response) => {
+      if (response.Users_by_pk.paysafe_user_id) {
         /**
          * Verify card token
          */
@@ -63,7 +68,7 @@ exports.addCard = functions.https.onCall((data, context) => {
               url: `${
                 functions.config().env.paysafe.url
               }/customervault/v1/profiles/${
-                firestoreUserDoc.paysafeProfileId
+                response.Users_by_pk.paysafe_user_id
               }/cards`,
               method: "POST",
               headers: {
@@ -83,7 +88,7 @@ exports.addCard = functions.https.onCall((data, context) => {
                 return card.data;
               })
               .catch((e) => {
-                console.log(e.response);
+                functions.logger.log(e.response);
                 throw new functions.https.HttpsError(
                   "internal",
                   "Could not add card"
@@ -91,7 +96,7 @@ exports.addCard = functions.https.onCall((data, context) => {
               });
           })
           .catch((e) => {
-            console.log(e.response);
+            functions.logger.log(e.response);
             throw new functions.https.HttpsError(
               "internal",
               "Could not verify card"
@@ -103,5 +108,6 @@ exports.addCard = functions.https.onCall((data, context) => {
           "User profile does not exist"
         );
       }
-    });
+    }
+  );
 });

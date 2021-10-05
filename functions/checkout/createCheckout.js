@@ -1,6 +1,16 @@
 const functions = require("firebase-functions");
-const admin = require("firebase-admin");
 const axios = require("axios");
+const { gql } = require("graphql-request");
+
+const GraphQLClient = require("../graphql/client");
+
+const GET_USER_BC_ID = gql`
+  query GetUserBCId($userId: String!) {
+    Users_by_pk(id: $userId) {
+      bc_user_id
+    }
+  }
+`;
 
 exports.createCheckout = functions.https.onCall((data, context) => {
   if (!context.auth) {
@@ -12,15 +22,9 @@ exports.createCheckout = functions.https.onCall((data, context) => {
 
   const uid = context.auth.uid;
 
-  return admin
-    .firestore()
-    .collection("Users")
-    .doc(uid)
-    .get()
-    .then((doc) => {
-      if (doc.exists) {
-        const firestoreUserDoc = doc.data();
-
+  return GraphQLClient.request(GET_USER_BC_ID, { userId: uid }).then(
+    (response) => {
+      if (response.Users_by_pk.bc_user_id) {
         const {
           products,
           first_name: firstName,
@@ -38,7 +42,7 @@ exports.createCheckout = functions.https.onCall((data, context) => {
             "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
           },
           data: {
-            customer_id: firestoreUserDoc.bcUserId,
+            customer_id: response.Users_by_pk.bc_user_id,
             line_items: products,
           },
         };
@@ -165,5 +169,6 @@ exports.createCheckout = functions.https.onCall((data, context) => {
           "User doc does not exist."
         );
       }
-    });
+    }
+  );
 });
