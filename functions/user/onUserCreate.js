@@ -8,8 +8,20 @@ const GraphQLClient = require("../graphql/client");
 const APPROVED_ADMINS = require("../config/admins");
 
 const INSERT_HASURA_USER = gql`
-  mutation InsertHasuraUser($userId: String!, $email: String!, $role: String!) {
-    insert_Users_one(object: { id: $userId, email: $email }) {
+  mutation InsertHasuraUser(
+    $userId: String!
+    $email: String!
+    $role: user_role_enum!
+    $paysafeId: String!
+  ) {
+    insert_Users_one(
+      object: {
+        id: $userId
+        email: $email
+        role: $role
+        paysafe_user_id: $paysafeId
+      }
+    ) {
       id
     }
   }
@@ -127,6 +139,7 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
       userId: uid,
       email,
       role: APPROVED_ADMINS.includes(email) ? "ADMIN" : "USER",
+      paysafeId: profileRequest.data.id,
     });
   } catch (e) {
     functions.logger.log(e);
