@@ -35,7 +35,14 @@ Local environment setup:
 
 ## Deployment
 
-1. From the **root** of the repo, run the following command to deploy to current project:
+1. Configure remote env vars (only if updates are required)
+   - Get latest remote env vars<br/>
+   `firebase functions:config:get > env.json`
+   - remove outer `env` object (field and brackets)
+   - edit as required
+   - reset env vars<br/>`firebase functions:config:unset env && firebase functions:config:set env="$(cat env.json)"`<br/>(note the double quotes around the value)
+      
+2. From the **root** of the repo, run the following command to deploy to current project:
    `firebase deploy --only functions`
 
 ## Resources
