@@ -2,8 +2,10 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
 const mux = require("@mux/mux-node");
+const { gql } = require("graphql-request");
+const GraphQLClient = require("../graphql/client");
 
-const UPDATE_USER = `
+const UPDATE_USER = gql`
   mutation UpdateUserPermissions($id: String!, $data: Users_set_input!) {
     update_Users_by_pk(pk_columns: { id: $id }, _set: $data) {
       id
@@ -157,38 +159,27 @@ exports.userUpdatePermissions = functions.https.onCall(
       }
 
       // Set role in Hasura
-      const ctUpdateUserOptions = {
-        url: functions.config().env.hasura.url,
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        data: {
-          query: UPDATE_USER,
-          variables: {
-            id: uid,
-            data: {
-              role: defaultRole.toUpperCase(),
-              is_breaker: setBreaker,
-            },
-          },
-        },
-      };
-
+   
       try {
-        await axios(ctUpdateUserOptions);
-
+        await GraphQLClient.request(UPDATE_USER, {
+          id: uid,
+          data: {
+            role: defaultRole.toUpperCase(),
+            is_breaker: setBreaker,
+          },
+        });
         return {
           message: "Successfully updated user.",
-        };
+        }
       } catch (e) {
-        console.log(e.response);
+        functions.logger.log(e);
         throw new functions.https.HttpsError(
           "internal",
-          "Could not update user in database."
+          "Could not update user in our database",
+          e
         );
       }
+   
     } else {
       throw new functions.https.HttpsError(
         "failed-precondition",
