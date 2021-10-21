@@ -175,8 +175,7 @@ exports.userUpdatePermissions = functions.https.onCall(
         functions.logger.log(e);
         throw new functions.https.HttpsError(
           "internal",
-          "Could not update user in our database",
-          e
+          "Could not update user in our database."
         );
       }
    
