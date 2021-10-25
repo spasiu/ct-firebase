@@ -59,7 +59,7 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
     const fetchBreakData = await GraphQLClient.request(GET_BREAK_DETAILS_FOR_LIVE, {
       id: breakId
     });
-    breakData = fetchBreakData.data.data.Breaks_by_pk;
+    breakData = fetchBreakData.Breaks_by_pk;
   } catch (e) {
     functions.logger.log(e);
     throw new functions.https.HttpsError(
