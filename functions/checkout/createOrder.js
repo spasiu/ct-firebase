@@ -14,6 +14,7 @@ const GET_AND_RESERVE_BREAK_PRODUCT_ITEMS_FOR_ORDER = gql`
     ) {
       returning {
         id
+        break_id
       }
     }
   }
@@ -54,6 +55,20 @@ const INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS = gql`
     ) {
       returning {
         id
+      }
+    }
+  }
+`;
+
+
+const SAVE_PURCHASED_BREAKS = gql`
+  mutation SavePurchasedBreaks(
+    $objects:[SaveBreak_insert_input!]!
+  ){
+    insert_SaveBreak(objects:$objects){
+      returning {
+      user_id
+      break_id
       }
     }
   }
@@ -122,14 +137,15 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     );
   }
 
+
   /**
    * Verify products exist in cart and in our database
    */
-  const ctBreakProductItems =
-    ctProductItemsRequest.update_BreakProductItems.returning;
+  const ctPurchasedBreaks =
+    ctProductItemsRequest.update_BreakProductItems.returning.map(_ => _.break_id);
 
   // Ensure number of break product items available in our databae matches length of BC line items
-  if (ctBreakProductItems.length !== breakQueryProductInput.length) {
+  if (ctPurchasedBreaks.length !== breakQueryProductInput.length) {
     
     // if not, undo previous reservation
     await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
@@ -252,6 +268,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     );
   }
 
+
   /**
    * Create Hasura Order
    */
@@ -284,7 +301,30 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     );
   }
 
+  /**
+   * Follow purchased breaks
+   */
+  try {
+    GraphQLClient.request(SAVE_PURCHASED_BREAKS,{
+      objects:
+      ctPurchasedBreaks
+        // remove dupes here, in the future there will be a db constraint,
+        // but still good to avoid bad inserts
+        .filter((breakId, index, breakIds) => breakIds.indexOf(breakId) === index)
+        .map( breakId => {
+          return {
+            break_id: breakId,
+            user_id: uid
+          }
+    })
+  })
+
+  } catch (e) {
+    functions.logger.log(e);
+  }
+
   return {
     message: "Order created",
   };
+
 });
