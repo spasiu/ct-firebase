@@ -1,8 +1,10 @@
 const functions = require("firebase-functions");
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
+const { gql } = require("graphql-request");
+const GraphQLClient = require("../graphql/client");
 
-const GET_AND_RESERVE_BREAK_PRODUCT_ITEMS_FOR_ORDER = `
+const GET_AND_RESERVE_BREAK_PRODUCT_ITEMS_FOR_ORDER = gql`
   mutation GetAndReserveBreakProductItemsForOrder(
     $lineItems: [BreakProductItems_bool_exp!]
   ) {
@@ -17,7 +19,7 @@ const GET_AND_RESERVE_BREAK_PRODUCT_ITEMS_FOR_ORDER = `
   }
 `;
 
-const UNDO_ITEM_RESERVATION = `
+const UNDO_ITEM_RESERVATION = gql`
   mutation UndoBreakProductItemReservation(
     $lineItems: [BreakProductItems_bool_exp!]
   ) {
@@ -30,7 +32,7 @@ const UNDO_ITEM_RESERVATION = `
   }
 `;
 
-const INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS = `
+const INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS = gql`
   mutation UpdateBreakProductItemsWithOrderId(
     $orderId: uuid!
     $orderObject: Orders_insert_input!
@@ -108,26 +110,12 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   /**
    * Get break product line items from our database
    */
-  const ctProductItemsQueryOptions = {
-    url: functions.config().env.hasura.url,
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    data: {
-      query: GET_AND_RESERVE_BREAK_PRODUCT_ITEMS_FOR_ORDER,
-      variables: {
-        lineItems: breakQueryProductInput,
-      },
-    },
-  };
-
   try {
-    ctProductItemsRequest = await axios(ctProductItemsQueryOptions);
+    ctProductItemsRequest = await GraphQLClient.request(GET_AND_RESERVE_BREAK_PRODUCT_ITEMS_FOR_ORDER, {
+      lineItems: breakQueryProductInput
+    });
   } catch (e) {
-    functions.logger.log(e.response);
-
+    functions.logger.log(e);
     throw new functions.https.HttpsError(
       "internal",
       "Could not get items from Cards & Treasure database"
@@ -135,32 +123,18 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   }
 
   /**
-   * Create Undo query
-   */
-  const ctUndoProductItemsReservationQueryOptions = {
-    url: functions.config().env.hasura.url,
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    data: {
-      query: UNDO_ITEM_RESERVATION,
-      variables: {
-        lineItems: breakQueryProductInput,
-      },
-    },
-  };
-
-  /**
    * Verify products exist in cart and in our database
    */
   const ctBreakProductItems =
-    ctProductItemsRequest.data.data.update_BreakProductItems.returning;
+    ctProductItemsRequest.update_BreakProductItems.returning;
 
   // Ensure number of break product items available in our databae matches length of BC line items
   if (ctBreakProductItems.length !== breakQueryProductInput.length) {
-    await axios(ctUndoProductItemsReservationQueryOptions);
+    
+    // if not, undo previous reservation
+    await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
+      lineItems: breakQueryProductInput
+    });
 
     throw new functions.https.HttpsError(
       "internal",
@@ -202,7 +176,10 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   } catch (e) {
     functions.logger.log(e.response);
 
-    await axios(ctUndoProductItemsReservationQueryOptions);
+    // if payment failed, undo reservation
+    await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
+      lineItems: breakQueryProductInput
+    });
 
     throw new functions.https.HttpsError(
       "internal",
@@ -230,7 +207,10 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   } catch (e) {
     functions.logger.log(e.response);
 
-    await axios(ctUndoProductItemsReservationQueryOptions);
+    // if bc order failed, undo reservation
+    await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
+      lineItems: breakQueryProductInput
+    });
 
     throw new functions.https.HttpsError(
       "internal",
@@ -261,7 +241,10 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   } catch (e) {
     functions.logger.log(e.response);
 
-    await axios(ctUndoProductItemsReservationQueryOptions);
+    // if bc order failed, undo reservation
+    await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
+      lineItems: breakQueryProductInput
+    });
 
     throw new functions.https.HttpsError(
       "internal",
@@ -272,39 +255,29 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   /**
    * Create Hasura Order
    */
-  const ctCreateOrderOptions = {
-    url: functions.config().env.hasura.url,
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    data: {
-      query: INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS,
-      variables: {
-        orderId: orderId,
-        breakLineItems: breakQueryProductInput,
-        orderObject: {
-          id: orderId,
-          user_id: uid,
-          bc_order_id: bcOrderId,
-          subtotal: bcCartData.subtotal_ex_tax,
-          discount_total: 0,
-          tax_total: bcCartData.tax_total,
-          grand_total: bcCartData.grand_total,
-          shipping_total: bcCartData.shipping_cost_total_ex_tax,
-        },
-      },
-    },
-  };
-
   try {
-    await axios(ctCreateOrderOptions);
+    ctProductItemsRequest = await GraphQLClient.request(INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS, {
+      orderId: orderId,
+      breakLineItems: breakQueryProductInput,
+      orderObject: {
+        id: orderId,
+        user_id: uid,
+        bc_order_id: bcOrderId,
+        subtotal: bcCartData.subtotal_ex_tax,
+        discount_total: 0,
+        tax_total: bcCartData.tax_total,
+        grand_total: bcCartData.grand_total,
+        shipping_total: bcCartData.shipping_cost_total_ex_tax,
+      }
+    });
   } catch (e) {
-    functions.logger.log(e.response);
+    functions.logger.log(e);
 
-    await axios(ctUndoProductItemsReservationQueryOptions);
-
+       // if db update failed, undo reservation (TODO: is this right, even if payment went through?)
+       await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
+        lineItems: breakQueryProductInput
+      });
+    
     throw new functions.https.HttpsError(
       "internal",
       "Could not create order in our database"
