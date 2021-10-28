@@ -1,10 +1,12 @@
 const functions = require("firebase-functions");
 const axios = require("axios");
+const { gql } = require("graphql-request");
+const GraphQLClient = require("../graphql/client");
 
 // TODO: Move BC config to env vars
 // TODO: Verify admin/manager/breaker
 
-const ADD_BREAK_PRODUCT_ITEMS = `
+const ADD_BREAK_PRODUCT_ITEMS = gql`
   mutation AddBreakProductItems($products: [BreakProductItems_insert_input!]!) {
     insert_BreakProductItems(objects: $products) {
       affected_rows
@@ -78,23 +80,8 @@ exports.createBreakProducts = functions.https.onCall((data, context) => {
       bc_variant_id: variant.id,
     }));
 
-    const ctRequestOptions = {
-      url: functions.config().env.hasura.url,
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      data: {
-        query: ADD_BREAK_PRODUCT_ITEMS,
-        variables: {
-          products,
-        },
-      },
-    };
-
-    return axios(ctRequestOptions).then((ctResponse) => {
-      return ctResponse.data;
-    });
+    GraphQLClient.request(ADD_BREAK_PRODUCT_ITEMS, {
+      products: products
+    }).then(response => response.data);
   });
 });
