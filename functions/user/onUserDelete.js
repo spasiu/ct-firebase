@@ -1,4 +1,5 @@
 const functions = require("firebase-functions");
+const admin = require("firebase-admin");
 const axios = require("axios");
 const { gql } = require("graphql-request");
 
@@ -95,6 +96,15 @@ exports.onUserDelete = functions.auth.user().onDelete(async (user) => {
       functions.logger.log(error.response.data);
     }
   }
+
+    /**
+   * Delete user in firestore
+   */
+     try {
+      await admin.firestore().collection("Users").doc(uid).delete();
+    } catch (e) {
+      functions.logger.warn("Could not delete user from Firestore:", e);
+    }
 
   /**
    * Remove user from Hasura
