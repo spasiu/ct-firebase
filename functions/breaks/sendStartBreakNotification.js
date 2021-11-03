@@ -1,7 +1,7 @@
 const functions = require("firebase-functions");
-const axios = require("axios");
 const { gql } = require("graphql-request");
 const GraphQLClient = require("../graphql/client");
+const notifier = require("../notifications_lib/intercom_notifier")
 
 
 const GET_BREAK_FOLLOWERS = gql`
@@ -27,30 +27,20 @@ exports.sendStartBreakNotification = functions.https.onCall(
         try {
             const result = await GraphQLClient.request(GET_BREAK_FOLLOWERS, { breakId: breakId });
 
-            result.SaveBreak.forEach(user => {
-                const intercomNotificationOptions = {
-                    url: functions.config().env.intercom.webApiUrl,
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${functions.config().env.intercom.webApiKey}`
-                    },
-                    data: {
-                        "event_name": "New Event",
-                        "created_at": Math.floor(Date.now() / 1000),
-                        "user_id": user.user_id,
-                        "metadata": {
-                            "breakName": breakName,
-                            "breaker": breakerName
-                        }
-                    },
-                };
+            const data = result.SaveBreak.map(user => {
+              return {
+                "event_name": "New Event",
+                "created_at": Math.floor(Date.now() / 1000),
+                "user_id": user.user_id,
+                "metadata": {
+                    "breakName": breakName,
+                    "breaker": breakerName
+                }
+              }  
+            })
 
-                axios(intercomNotificationOptions).catch(e => {
-                    functions.logger.log(`Could not send start break notification for ${breakName} to user ${user.user_id}`, JSON.stringify(e));
-                });
-            });
-
+            notifier(data);
+            
         } catch (e) {
             functions.logger.log(e);
             throw new functions.https.HttpsError(
