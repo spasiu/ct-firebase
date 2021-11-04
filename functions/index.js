@@ -17,9 +17,14 @@ module.exports = {
   ...require("./cards/getCards"),
   ...require("./cards/removeCard"),
 
-  // Products
-  ...require("./products/createBreakProducts"),
-  ...require("./products/startBreak"),
+  // Breaks
+  ...require("./breaks/createBreakProducts"),
+  ...require("./breaks/startBreak"),
+
+  // Notifications
+  ...require("./notifications/sendEventLiveNotification"),
+  ...require("./notifications/sendBreakLiveNotification"),
+  ...require("./notifications/sendHitNotification"),
 
   // Cart
   ...require("./checkout/createCheckout"),

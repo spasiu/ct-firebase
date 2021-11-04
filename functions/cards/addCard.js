@@ -3,7 +3,7 @@ const axios = require("axios");
 
 const { gql } = require("graphql-request");
 
-const GraphQLClient = require("../graphql/client");
+const GraphQLClient = require("../lib/graphql");
 
 const GET_USER_PAYSAFE_ID = gql`
   query GetUserPaysafeId($userId: String!) {

@@ -3,7 +3,7 @@ const admin = require("firebase-admin");
 const axios = require("axios");
 const { gql } = require("graphql-request");
 
-const GraphQLClient = require("../graphql/client");
+const GraphQLClient = require("../lib/graphql");
 
 const UPDATE_BC_ID = gql`
   mutation UpdateBigCommerceId($userId: String!, $bcId: Int!) {

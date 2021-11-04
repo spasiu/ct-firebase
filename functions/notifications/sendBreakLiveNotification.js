@@ -1,7 +1,7 @@
 const functions = require("firebase-functions");
 const { gql } = require("graphql-request");
-const GraphQLClient = require("../graphql/client");
-const notifier = require("../notifications_lib/intercom_notifier")
+const GraphQLClient = require("../lib/graphql");
+const notifier = require("../lib/notification")
 
 
 const GET_BREAK_FOLLOWERS = gql`
@@ -12,7 +12,7 @@ const GET_BREAK_FOLLOWERS = gql`
     }
 `
 
-exports.sendStartBreakNotification = functions.https.onCall(
+exports.sendBreakLiveNotification = functions.https.onCall(
     async (data, context) => {
         if (!context.auth) {
             throw new functions.https.HttpsError(
@@ -29,7 +29,7 @@ exports.sendStartBreakNotification = functions.https.onCall(
 
             const data = result.SaveBreak.map(user => {
               return {
-                "event_name": "New Event",
+                "event_name": "Break Live",
                 "created_at": Math.floor(Date.now() / 1000),
                 "user_id": user.user_id,
                 "metadata": {
@@ -40,7 +40,7 @@ exports.sendStartBreakNotification = functions.https.onCall(
             })
 
             notifier(data);
-            
+
         } catch (e) {
             functions.logger.log(e);
             throw new functions.https.HttpsError(

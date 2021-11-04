@@ -3,7 +3,7 @@ const admin = require("firebase-admin");
 const axios = require("axios");
 const mux = require("@mux/mux-node");
 const { gql } = require("graphql-request");
-const GraphQLClient = require("../graphql/client");
+const GraphQLClient = require("../lib/graphql");
 
 const UPDATE_USER = gql`
   mutation UpdateUserPermissions($id: String!, $data: Users_set_input!) {

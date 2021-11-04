@@ -2,7 +2,7 @@ const functions = require("firebase-functions");
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 const { gql } = require("graphql-request");
-const GraphQLClient = require("../graphql/client");
+const GraphQLClient = require("../lib/graphql");
 
 const GET_AND_RESERVE_BREAK_PRODUCT_ITEMS_FOR_ORDER = gql`
   mutation GetAndReserveBreakProductItemsForOrder(

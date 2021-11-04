@@ -1,7 +1,7 @@
 const functions = require("firebase-functions");
 const shuffleArray = require("../utils/shuffleArray");
 const { gql } = require("graphql-request");
-const GraphQLClient = require("../graphql/client");
+const GraphQLClient = require("../lib/graphql");
 
 const GET_BREAK_DETAILS_FOR_LIVE = gql`
   query GetBreakDetailsForLive($id: uuid!) {
