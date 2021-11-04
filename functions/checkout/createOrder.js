@@ -15,6 +15,9 @@ const GET_AND_RESERVE_BREAK_PRODUCT_ITEMS_FOR_ORDER = gql`
       returning {
         id
         break_id
+        Break {
+          status
+        }
       }
     }
   }
@@ -137,6 +140,24 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     );
   }
 
+  /**
+   * make sure break is in a sellable state
+   */
+  const nUnsellableStatuses = ctProductItemsRequest
+    .update_BreakProductItems.returning
+    .map(productItem => productItem.Break.status)
+    .filter(breakStatus => breakStatus === "COMPLETED" ||
+                           breakStatus === "LIVE" ||
+                           breakStatus === "SOLDOUT")
+    .length;
+
+  if (nUnsellableStatuses > 0) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      nUnsellableStatuses > 1 ? "Spots are no longer available." :
+                                "Spot is no longer available."
+    );
+  }
 
   /**
    * Verify products exist in cart and in our database
