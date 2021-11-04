@@ -4,14 +4,16 @@ const GraphQLClient = require("../lib/graphql");
 const notifier = require("../lib/notification")
 
 
+/**
+ * sadly, there is no way to get from the event to breaker to savebreaker,
+ * as the latter is only connect to the Users table via user_id and not
+ * breaker_id; when breakers are broken out, we can fix this,
+ * for now, there have to be 2 db calls
+ */
 const GET_EVENT_FOLLOWERS = gql`
     query EventFollowers($eventId:uuid!) {
         SaveEvent(where: {event_id: {_eq: $eventId}}) {
             user_id
-            Event {
-                user_id
-                title
-            }
         }
     }
 `
@@ -19,9 +21,6 @@ const GET_BREAKER_FOLLOWERS = gql`
     query BreakerFollowers($breakerId:String!) {
         SaveBreaker(where: {breaker_id: {_eq: $breakerId}}) {
             user_id
-            Breaker {
-                username
-            }
         }
     }
 `
@@ -35,21 +34,15 @@ exports.sendEventLiveNotification = functions.https.onCall(
             );
         }
 
-        const { eventId } = data;
+        const { eventId, eventName, breakerId, breakerName } = data;
 
         // get event and breaker followers and populate data for notification
         try {
             const eventFollowers = await GraphQLClient.request(GET_EVENT_FOLLOWERS, { eventId: eventId });
-            const breakerId = eventFollowers.SaveEvent[0].Event.user_id;
-            const eventName = eventFollowers.SaveEvent[0].Event.title;
             let users = eventFollowers.SaveEvent.map(follower => follower.user_id)
 
             const breakerFollowers = await GraphQLClient.request(GET_BREAKER_FOLLOWERS, { breakerId: breakerId });
-            const breakerName = breakerFollowers.SaveBreaker[0].Breaker.username;
             users = users.concat(breakerFollowers.SaveBreaker.map(follower => follower.user_id));
-
-            functions.logger.log(`BREAKER: ${breakerName}->${breakerId}, EVENT: ${eventName}, USERS: ${JSON.stringify(users)}`)
-
 
             const data = users.map(user => {
                 return {
