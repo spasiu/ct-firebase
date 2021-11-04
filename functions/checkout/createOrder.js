@@ -152,6 +152,10 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     .length;
 
   if (nUnsellableStatuses > 0) {
+    await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
+      lineItems: breakQueryProductInput
+    });
+    
     throw new functions.https.HttpsError(
       "failed-precondition",
       nUnsellableStatuses > 1 ? "Spots are no longer available." :
