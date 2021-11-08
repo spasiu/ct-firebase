@@ -3,4 +3,5 @@ module.exports = [
   "rgold@cardsandtreasure.com",
   "jadler@cardsandtreasure.com",
   "sbakolias@cardsandtreasure.com",
+  "jweiss@cardsandtreasure.com",
 ];

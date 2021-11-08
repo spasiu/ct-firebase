@@ -1,7 +1,7 @@
 const functions = require("firebase-functions");
 const axios = require("axios");
 const { gql } = require("graphql-request");
-const GraphQLClient = require("../graphql/client");
+const GraphQLClient = require("../lib/graphql");
 
 // TODO: Move BC config to env vars
 // TODO: Verify admin/manager/breaker

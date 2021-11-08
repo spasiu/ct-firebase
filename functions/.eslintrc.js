@@ -7,7 +7,7 @@ module.exports = {
   parserOptions: {
     "ecmaVersion": 2018
   },
-  extends: ["eslint:recommended", "prettier"],
+  extends: ["eslint:recommended"],
   rules: {
     quotes: ["error", "double"],
   },

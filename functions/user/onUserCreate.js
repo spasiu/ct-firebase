@@ -4,7 +4,7 @@ const axios = require("axios");
 const crypto = require("crypto");
 const { gql } = require("graphql-request");
 
-const GraphQLClient = require("../graphql/client");
+const GraphQLClient = require("../lib/graphql");
 const APPROVED_ADMINS = require("../config/admins");
 
 const INSERT_HASURA_USER = gql`
