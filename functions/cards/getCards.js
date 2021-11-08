@@ -4,6 +4,7 @@ const axios = require("axios");
 const { gql } = require("graphql-request");
 
 const GraphQLClient = require("../lib/graphql");
+const authorize = require("../lib/authorization");
 
 const GET_USER_PAYSAFE_ID = gql`
   query GetUserPaysafeId($userId: String!) {
@@ -14,12 +15,7 @@ const GET_USER_PAYSAFE_ID = gql`
 `;
 
 exports.getCards = functions.https.onCall((data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "Must be logged in."
-    );
-  }
+  authorize(context);
 
   const uid = context.auth.uid;
 

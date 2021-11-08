@@ -1,13 +1,9 @@
 const functions = require("firebase-functions");
 const axios = require("axios");
+const authorize = require("../lib/authorization");
 
 exports.removeItem = functions.https.onCall((data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "Must be logged in."
-    );
-  }
+  authorize(context);
 
   const { cartId, itemId } = data;
 

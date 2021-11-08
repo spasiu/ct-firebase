@@ -4,6 +4,7 @@ const axios = require("axios");
 const mux = require("@mux/mux-node");
 const { gql } = require("graphql-request");
 const GraphQLClient = require("../lib/graphql");
+const authorize = require("../lib/authorization");
 
 const UPDATE_USER = gql`
   mutation UpdateUserPermissions($id: String!, $data: Users_set_input!) {
@@ -29,161 +30,144 @@ const UPSERT_STREAM = `
 
 // TODO: Create Mux stream if breaker
 
-exports.userUpdatePermissions = functions.https.onCall(
-  async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "failed-precondition",
-        "Must be logged in."
+exports.userUpdatePermissions = functions.https.onCall(async (data, context) => {
+  authorize(context, "admin");
+
+  const { email, setAdmin, setBreaker } = data;
+
+  let userRecord;
+
+  // Get user record
+  try {
+    userRecord = await admin.auth().getUserByEmail(email);
+  } catch (e) {
+    throw new functions.https.HttpsError("not-found", "User not found.");
+  }
+
+  // Get user ID
+  const uid = userRecord.uid;
+
+  // Setup roles
+  let defaultRole, allowedRoles;
+
+  if (setAdmin) {
+    defaultRole = "admin";
+    allowedRoles = ["user", "manager", "admin"];
+  } else if (setBreaker) {
+    defaultRole = "manager";
+    allowedRoles = ["user", "manager"];
+  } else {
+    defaultRole = "user";
+    allowedRoles = ["user"];
+  }
+
+  // Setup claims object
+  const customClaims = {
+    "https://hasura.io/jwt/claims": {
+      "x-hasura-default-role": defaultRole,
+      "x-hasura-allowed-roles": allowedRoles,
+      "x-hasura-user-id": uid,
+    },
+  };
+
+  // Set claims
+  try {
+    await admin.auth().setCustomUserClaims(uid, customClaims);
+  } catch (e) {
+    throw new functions.https.HttpsError(
+      "internal",
+      "Could not update user claims."
+    );
+  }
+
+  // Set refresh token time
+  try {
+    await admin.firestore().collection("Users").doc(uid).set(
+      {
+        refreshToken: admin.database.ServerValue.TIMESTAMP,
+      },
+      { merge: true }
+    );
+  } catch (e) {
+    throw new functions.https.HttpsError(
+      "internal",
+      "Could not update refresh token time."
+    );
+  }
+
+  // Create stream if this user is a breaker
+  if (setBreaker) {
+    try {
+      const muxClient = new mux(
+        functions.config().env.mux.token,
+        functions.config().env.mux.secret
       );
-    }
+      const muxLiveStreamResponse =
+        await muxClient.Video.LiveStreams.create({
+          playback_policy: "public",
+          new_asset_settings: { playback_policy: "public" },
+          reduced_latency: true,
+        });
 
-    const hasuraClaims = context.auth.token["https://hasura.io/jwt/claims"];
-    const isAdmin = hasuraClaims["x-hasura-default-role"] === "admin";
+      await admin.firestore().collection("Breakers").doc(uid).set(
+        {
+          muxStreamId: muxLiveStreamResponse.id,
+          streamState: "idle",
+        },
+        { merge: true }
+      );
 
-    const { email, setAdmin, setBreaker } = data;
-
-    let userRecord;
-
-    if (isAdmin) {
-      // Get user record
-      try {
-        userRecord = await admin.auth().getUserByEmail(email);
-      } catch (e) {
-        throw new functions.https.HttpsError("not-found", "User not found.");
-      }
-
-      // Get user ID
-      const uid = userRecord.uid;
-
-      // Setup roles
-      let defaultRole, allowedRoles;
-
-      if (setAdmin) {
-        defaultRole = "admin";
-        allowedRoles = ["user", "manager", "admin"];
-      } else if (setBreaker) {
-        defaultRole = "manager";
-        allowedRoles = ["user", "manager"];
-      } else {
-        defaultRole = "user";
-        allowedRoles = ["user"];
-      }
-
-      // Setup claims object
-      const customClaims = {
-        "https://hasura.io/jwt/claims": {
-          "x-hasura-default-role": defaultRole,
-          "x-hasura-allowed-roles": allowedRoles,
-          "x-hasura-user-id": uid,
+      // Add stream data to Hasura
+      const ctCreateStreamOptions = {
+        url: functions.config().env.hasura.url,
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        data: {
+          query: UPSERT_STREAM,
+          variables: {
+            data: {
+              user_id: uid,
+              stream_id: muxLiveStreamResponse.id,
+              stream_key: muxLiveStreamResponse.stream_key,
+              playback_id: muxLiveStreamResponse.playback_ids[0].id,
+              stream_url: `https://stream.mux.com/${muxLiveStreamResponse.playback_ids[0].id}.m3u8`,
+            },
+          },
         },
       };
 
-      // Set claims
-      try {
-        await admin.auth().setCustomUserClaims(uid, customClaims);
-      } catch (e) {
-        throw new functions.https.HttpsError(
-          "internal",
-          "Could not update user claims."
-        );
-      }
-
-      // Set refresh token time
-      try {
-        await admin.firestore().collection("Users").doc(uid).set(
-          {
-            refreshToken: admin.database.ServerValue.TIMESTAMP,
-          },
-          { merge: true }
-        );
-      } catch (e) {
-        throw new functions.https.HttpsError(
-          "internal",
-          "Could not update refresh token time."
-        );
-      }
-
-      // Create stream if this user is a breaker
-      if (setBreaker) {
-        try {
-          const muxClient = new mux(
-            functions.config().env.mux.token,
-            functions.config().env.mux.secret
-          );
-          const muxLiveStreamResponse =
-            await muxClient.Video.LiveStreams.create({
-              playback_policy: "public",
-              new_asset_settings: { playback_policy: "public" },
-              reduced_latency: true,
-            });
-
-          await admin.firestore().collection("Breakers").doc(uid).set(
-            {
-              muxStreamId: muxLiveStreamResponse.id,
-              streamState: "idle",
-            },
-            { merge: true }
-          );
-
-          // Add stream data to Hasura
-          const ctCreateStreamOptions = {
-            url: functions.config().env.hasura.url,
-            method: "POST",
-            headers: {
-              Accept: "application/json",
-              "Content-Type": "application/json",
-            },
-            data: {
-              query: UPSERT_STREAM,
-              variables: {
-                data: {
-                  user_id: uid,
-                  stream_id: muxLiveStreamResponse.id,
-                  stream_key: muxLiveStreamResponse.stream_key,
-                  playback_id: muxLiveStreamResponse.playback_ids[0].id,
-                  stream_url: `https://stream.mux.com/${muxLiveStreamResponse.playback_ids[0].id}.m3u8`,
-                },
-              },
-            },
-          };
-
-          await axios(ctCreateStreamOptions);
-        } catch (e) {
-          console.log(e.response);
-          throw new functions.https.HttpsError(
-            "internal",
-            "Could not create live stream."
-          );
-        }
-      }
-
-      // Set role in Hasura
-   
-      try {
-        await GraphQLClient.request(UPDATE_USER, {
-          id: uid,
-          data: {
-            role: defaultRole.toUpperCase(),
-            is_breaker: setBreaker,
-          },
-        });
-        return {
-          message: "Successfully updated user.",
-        }
-      } catch (e) {
-        functions.logger.log(e);
-        throw new functions.https.HttpsError(
-          "internal",
-          "Could not update user in our database."
-        );
-      }
-   
-    } else {
+      await axios(ctCreateStreamOptions);
+    } catch (e) {
+      console.log(e.response);
       throw new functions.https.HttpsError(
-        "failed-precondition",
-        "Must be logged in as an administrator."
+        "internal",
+        "Could not create live stream."
       );
     }
   }
+
+  // Set role in Hasura
+
+  try {
+    await GraphQLClient.request(UPDATE_USER, {
+      id: uid,
+      data: {
+        role: defaultRole.toUpperCase(),
+        is_breaker: setBreaker,
+      },
+    });
+    return {
+      message: "Successfully updated user.",
+    }
+  } catch (e) {
+    functions.logger.log(e);
+    throw new functions.https.HttpsError(
+      "internal",
+      "Could not update user in our database."
+    );
+  }
+}
 );

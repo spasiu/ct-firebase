@@ -3,6 +3,7 @@ const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 const { gql } = require("graphql-request");
 const GraphQLClient = require("../lib/graphql");
+const authorize = require("../lib/authorization");
 
 const GET_AND_RESERVE_BREAK_PRODUCT_ITEMS_FOR_ORDER = gql`
   mutation GetAndReserveBreakProductItemsForOrder(
@@ -78,12 +79,7 @@ const SAVE_PURCHASED_BREAKS = gql`
 `;
 
 exports.createOrder = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "Must be logged in."
-    );
-  }
+  authorize(context);
 
   const { cartId, paymentToken } = data;
   const uid = context.auth.uid;
