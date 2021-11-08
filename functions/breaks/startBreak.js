@@ -2,6 +2,7 @@ const functions = require("firebase-functions");
 const shuffleArray = require("../utils/shuffleArray");
 const { gql } = require("graphql-request");
 const GraphQLClient = require("../lib/graphql");
+const authorize = require("../lib/authorization");
 
 const GET_BREAK_DETAILS_FOR_LIVE = gql`
   query GetBreakDetailsForLive($id: uuid!) {
@@ -38,12 +39,7 @@ const SET_BREAK_RESULTS_FOR_LIVE = gql`
 `;
 
 exports.startBreak = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "Must be logged in."
-    );
-  }
+  authorize(context,"manager");
 
   const { breakId } = data;
 

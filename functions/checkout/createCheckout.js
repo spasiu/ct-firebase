@@ -3,6 +3,7 @@ const axios = require("axios");
 const { gql } = require("graphql-request");
 
 const GraphQLClient = require("../lib/graphql");
+const authorize = require("../lib/authorization");
 
 const GET_USER_BC_ID = gql`
   query GetUserBCId($userId: String!) {
@@ -13,12 +14,7 @@ const GET_USER_BC_ID = gql`
 `;
 
 exports.createCheckout = functions.https.onCall((data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "Must be logged in."
-    );
-  }
+  authorize(context);
 
   const uid = context.auth.uid;
 

@@ -4,6 +4,7 @@ const axios = require("axios");
 const { gql } = require("graphql-request");
 
 const GraphQLClient = require("../lib/graphql");
+const authorize = require("../lib/authorization");
 
 const UPDATE_BC_ID = gql`
   mutation UpdateBigCommerceId($userId: String!, $bcId: Int!) {
@@ -16,78 +17,72 @@ const UPDATE_BC_ID = gql`
   }
 `;
 
-exports.createBigCommerceUser = functions.https.onCall(
-  async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "failed-precondition",
-        "Must be logged in."
-      );
-    }
+exports.createBigCommerceUser = functions.https.onCall(async (data, context) => {
+  authorize(context);
 
-    const { first_name, last_name } = data;
+  const { first_name, last_name } = data;
 
-    const uid = context.auth.uid;
-    const email = context.auth.token.email;
+  const uid = context.auth.uid;
+  const email = context.auth.token.email;
 
-    let bcUserRequest;
+  let bcUserRequest;
 
-    const bcCreateUseOptions = {
-      url: `${functions.config().env.bigCommerce.urlV2}/customers`,
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "X-Auth-Client": functions.config().env.bigCommerce.clientId,
-        "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
-      },
-      data: {
-        email: email,
-        first_name: first_name,
-        last_name: last_name,
-      },
-    };
+  const bcCreateUseOptions = {
+    url: `${functions.config().env.bigCommerce.urlV2}/customers`,
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+      "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
+    },
+    data: {
+      email: email,
+      first_name: first_name,
+      last_name: last_name,
+    },
+  };
 
-    try {
-      bcUserRequest = await axios(bcCreateUseOptions);
-    } catch (e) {
-      functions.logger.log(e.response);
-      throw new functions.https.HttpsError(
-        "internal",
-        "Could not create BigCommerce account"
-      );
-    }
-
-    try {
-      await admin.firestore().collection("Users").doc(uid).set(
-        {
-          bcUserId: bcUserRequest.data.id,
-        },
-        { merge: true }
-      );
-    } catch (e) {
-      functions.logger.log(e.response);
-      throw new functions.https.HttpsError(
-        "internal",
-        "Could not save details to user's profile"
-      );
-    }
-
-    try {
-      await GraphQLClient.request(UPDATE_BC_ID, {
-        userId: uid,
-        bcId: bcUserRequest.data.id,
-      });
-    } catch (e) {
-      functions.logger.log(e);
-      throw new functions.https.HttpsError(
-        "internal",
-        "Could not save details to user's profile in database"
-      );
-    }
-
-    return {
-      message: "Successfully added user",
-    };
+  try {
+    bcUserRequest = await axios(bcCreateUseOptions);
+  } catch (e) {
+    functions.logger.log(e.response);
+    throw new functions.https.HttpsError(
+      "internal",
+      "Could not create BigCommerce account"
+    );
   }
+
+  try {
+    await admin.firestore().collection("Users").doc(uid).set(
+      {
+        bcUserId: bcUserRequest.data.id,
+      },
+      { merge: true }
+    );
+  } catch (e) {
+    functions.logger.log(e.response);
+    throw new functions.https.HttpsError(
+      "internal",
+      "Could not save details to user's profile"
+    );
+  }
+
+  try {
+    await GraphQLClient.request(UPDATE_BC_ID, {
+      userId: uid,
+      bcId: bcUserRequest.data.id,
+    });
+  } catch (e) {
+    functions.logger.log(e);
+    throw new functions.https.HttpsError(
+      "internal",
+      "Could not save details to user's profile in database"
+    );
+  }
+
+  return {
+    message: "Successfully added user",
+  };
+}
 );

@@ -1,5 +1,6 @@
 const functions = require("firebase-functions");
 const { gql } = require("graphql-request");
+const authorize = require("../lib/authorization");
 const GraphQLClient = require("../lib/graphql");
 const notifier = require("../lib/notification")
 
@@ -25,48 +26,42 @@ const GET_BREAKER_FOLLOWERS = gql`
     }
 `
 
-exports.sendEventLiveNotification = functions.https.onCall(
-    async (data, context) => {
-        if (!context.auth) {
-            throw new functions.https.HttpsError(
-                "failed-precondition",
-                "Must be logged in."
-            );
-        }
+exports.sendEventLiveNotification = functions.https.onCall(async (data, context) => {
+    authorize(context, "manager");
 
-        const { eventId, eventName, breakerId, breakerName } = data;
+    const { eventId, eventName, breakerId, breakerName } = data;
 
-        // get event and breaker followers and populate data for notification
-        try {
-            const eventFollowers = await GraphQLClient.request(GET_EVENT_FOLLOWERS, { eventId: eventId });
-            let users = eventFollowers.SaveEvent.map(follower => follower.user_id)
+    // get event and breaker followers and populate data for notification
+    try {
+        const eventFollowers = await GraphQLClient.request(GET_EVENT_FOLLOWERS, { eventId: eventId });
+        let users = eventFollowers.SaveEvent.map(follower => follower.user_id)
 
-            const breakerFollowers = await GraphQLClient.request(GET_BREAKER_FOLLOWERS, { breakerId: breakerId });
-            users = users.concat(breakerFollowers.SaveBreaker.map(follower => follower.user_id));
+        const breakerFollowers = await GraphQLClient.request(GET_BREAKER_FOLLOWERS, { breakerId: breakerId });
+        users = users.concat(breakerFollowers.SaveBreaker.map(follower => follower.user_id));
 
-            const data = users.map(user => {
-                return {
-                    "event_name": "Event Live",
-                    "created_at": Math.floor(Date.now() / 1000),
-                    "user_id": user,
-                    "metadata": {
-                        "eventName": eventName,
-                        "breaker": breakerName
-                    }
+        const data = users.map(user => {
+            return {
+                "event_name": "Event Live",
+                "created_at": Math.floor(Date.now() / 1000),
+                "user_id": user,
+                "metadata": {
+                    "eventName": eventName,
+                    "breaker": breakerName
                 }
-            })
+            }
+        })
 
-            notifier(data);
+        notifier(data);
 
-        } catch (e) {
-            functions.logger.log(e);
-            throw new functions.https.HttpsError(
-                "internal",
-                `Could not get followers for event: ${eventId}`
-            );
-        }
-        return {
-            message: "Successfully sent notifications",
-        };
+    } catch (e) {
+        functions.logger.log(e);
+        throw new functions.https.HttpsError(
+            "internal",
+            `Could not get followers for event: ${eventId}`
+        );
     }
+    return {
+        message: "Successfully sent notifications",
+    };
+}
 );

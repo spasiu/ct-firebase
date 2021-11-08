@@ -2,6 +2,7 @@ const functions = require("firebase-functions");
 const axios = require("axios");
 const { gql } = require("graphql-request");
 const GraphQLClient = require("../lib/graphql");
+const authorize = require("../lib/authorization");
 
 // TODO: Move BC config to env vars
 // TODO: Verify admin/manager/breaker
@@ -15,12 +16,7 @@ const ADD_BREAK_PRODUCT_ITEMS = gql`
 `;
 
 exports.createBreakProducts = functions.https.onCall((data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "Must be logged in."
-    );
-  }
+  authorize(context,"manager");
 
   const { breakData, lineItems } = data;
 
