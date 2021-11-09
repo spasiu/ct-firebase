@@ -9,7 +9,7 @@ const authorize = (context, requiredRole = "user") => {
     }
 
     const userRole = context.auth.token["https://hasura.io/jwt/claims"]["x-hasura-default-role"];
-    permissionsError = new functions.https.HttpsError(
+    const permissionsError = new functions.https.HttpsError(
         "failed-precondition",
         "Current user does not have permissions for the requested operation."
     );
