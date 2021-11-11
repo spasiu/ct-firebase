@@ -34,38 +34,6 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
   let profileRequest;
 
   /**
-   * Setup custom claims
-   */
-  let customClaims = {
-    "https://hasura.io/jwt/claims": {
-      "x-hasura-default-role": "user",
-      "x-hasura-allowed-roles": ["user"],
-      "x-hasura-user-id": uid,
-    },
-  };
-
-  if (APPROVED_ADMINS.includes(email)) {
-    customClaims = {
-      "https://hasura.io/jwt/claims": {
-        "x-hasura-default-role": "admin",
-        "x-hasura-allowed-roles": ["user", "manager", "admin"],
-        "x-hasura-user-id": uid,
-      },
-    };
-  }
-
-  // Set claims
-  try {
-    await admin.auth().setCustomUserClaims(uid, customClaims);
-  } catch (e) {
-    functions.logger.log(e);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Could not update user claims"
-    );
-  }
-
-  /**
    * Create Paysafe profile for user
    */
   const psCreateProfileOptions = {
@@ -147,7 +115,40 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
     );
   }
 
+  /**
+   * Setup custom claims
+   */
+   let customClaims = {
+    "https://hasura.io/jwt/claims": {
+      "x-hasura-default-role": "user",
+      "x-hasura-allowed-roles": ["user"],
+      "x-hasura-user-id": uid,
+    },
+  };
+
+  if (APPROVED_ADMINS.includes(email)) {
+    customClaims = {
+      "https://hasura.io/jwt/claims": {
+        "x-hasura-default-role": "admin",
+        "x-hasura-allowed-roles": ["user", "manager", "admin"],
+        "x-hasura-user-id": uid,
+      },
+    };
+  }
+
+  // Set claims
+  try {
+    await admin.auth().setCustomUserClaims(uid, customClaims);
+  } catch (e) {
+    functions.logger.log(e);
+    throw new functions.https.HttpsError(
+      "internal",
+      "Could not update user claims"
+    );
+  }
+
   return {
     message: "Successfully added user",
   };
+
 });
