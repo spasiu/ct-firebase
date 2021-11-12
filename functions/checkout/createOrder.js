@@ -155,7 +155,8 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError(
       "failed-precondition",
       nUnsellableStatuses > 1 ? "Spots are no longer available." :
-                                "Spot is no longer available."
+                                "Spot is no longer available.",
+      { ct_error_code: "purchase_no_longer_available" }
     );
   }
 
