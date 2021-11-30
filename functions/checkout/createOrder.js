@@ -5,20 +5,15 @@ const { gql } = require("graphql-request");
 const GraphQLClient = require("../lib/graphql");
 const authorize = require("../lib/authorization");
 
-const GET_AND_RESERVE_BREAK_PRODUCT_ITEMS_FOR_ORDER = gql`
-  mutation GetAndReserveBreakProductItemsForOrder(
+const GET_BREAK_PRODUCT_ITEMS_FOR_ORDER = gql`
+  query GetBreakProductItemsForOrder(
     $lineItems: [BreakProductItems_bool_exp!]
   ) {
-    update_BreakProductItems(
-      where: { _or: $lineItems }
-      _inc: { quantity: -1 }
-    ) {
-      returning {
-        id
-        break_id
-        Break {
-          status
-        }
+    BreakProductItems(where: { _or: $lineItems }) {
+      id
+      break_id
+      Break {
+        status
       }
     }
   }
@@ -64,15 +59,12 @@ const INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS = gql`
   }
 `;
 
-
 const SAVE_PURCHASED_BREAKS = gql`
-  mutation SavePurchasedBreaks(
-    $objects:[SaveBreak_insert_input!]!
-  ){
-    insert_SaveBreak(objects:$objects){
+  mutation SavePurchasedBreaks($objects: [SaveBreak_insert_input!]!) {
+    insert_SaveBreak(objects: $objects) {
       returning {
-      user_id
-      break_id
+        user_id
+        break_id
       }
     }
   }
@@ -125,9 +117,12 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
    * Get break product line items from our database
    */
   try {
-    ctProductItemsRequest = await GraphQLClient.request(GET_AND_RESERVE_BREAK_PRODUCT_ITEMS_FOR_ORDER, {
-      lineItems: breakQueryProductInput
-    });
+    ctProductItemsRequest = await GraphQLClient.request(
+      GET_BREAK_PRODUCT_ITEMS_FOR_ORDER,
+      {
+        lineItems: breakQueryProductInput,
+      }
+    );
   } catch (e) {
     functions.logger.log(e);
     throw new functions.https.HttpsError(
@@ -139,19 +134,21 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   /**
    * make sure break is in a sellable state
    */
-  const nUnsellableStatuses = ctProductItemsRequest
-    .update_BreakProductItems.returning
-    .map(productItem => productItem.Break.status)
-    .filter(breakStatus => breakStatus === "COMPLETED" ||
-                           breakStatus === "LIVE" ||
-                           breakStatus === "SOLDOUT")
-    .length;
+  const nUnsellableStatuses =
+    ctProductItemsRequest.BreakProductItems
+      .map((productItem) => productItem.Break.status)
+      .filter(
+        (breakStatus) =>
+          breakStatus === "COMPLETED" ||
+          breakStatus === "LIVE" ||
+          breakStatus === "SOLDOUT"
+      ).length;
 
   if (nUnsellableStatuses > 0) {
     await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
-      lineItems: breakQueryProductInput
+      lineItems: breakQueryProductInput,
     });
-    
+
     throw new functions.https.HttpsError(
       "failed-precondition",
       nUnsellableStatuses > 1 ? "Spots are no longer available." :
@@ -164,14 +161,15 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
    * Verify products exist in cart and in our database
    */
   const ctPurchasedBreaks =
-    ctProductItemsRequest.update_BreakProductItems.returning.map(_ => _.break_id);
+    ctProductItemsRequest.BreakProductItems.map(
+      (_) => _.break_id
+    );
 
   // Ensure number of break product items available in our databae matches length of BC line items
   if (ctPurchasedBreaks.length !== breakQueryProductInput.length) {
-    
     // if not, undo previous reservation
     await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
-      lineItems: breakQueryProductInput
+      lineItems: breakQueryProductInput,
     });
 
     throw new functions.https.HttpsError(
@@ -216,7 +214,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
 
     // if payment failed, undo reservation
     await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
-      lineItems: breakQueryProductInput
+      lineItems: breakQueryProductInput,
     });
 
     throw new functions.https.HttpsError(
@@ -247,7 +245,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
 
     // if bc order failed, undo reservation
     await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
-      lineItems: breakQueryProductInput
+      lineItems: breakQueryProductInput,
     });
 
     throw new functions.https.HttpsError(
@@ -281,7 +279,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
 
     // if bc order failed, undo reservation
     await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
-      lineItems: breakQueryProductInput
+      lineItems: breakQueryProductInput,
     });
 
     throw new functions.https.HttpsError(
@@ -290,33 +288,35 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     );
   }
 
-
   /**
    * Create Hasura Order
    */
   try {
-    ctProductItemsRequest = await GraphQLClient.request(INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS, {
-      orderId: orderId,
-      breakLineItems: breakQueryProductInput,
-      orderObject: {
-        id: orderId,
-        user_id: uid,
-        bc_order_id: bcOrderId,
-        subtotal: bcCartData.subtotal_ex_tax,
-        discount_total: 0,
-        tax_total: bcCartData.tax_total,
-        grand_total: bcCartData.grand_total,
-        shipping_total: bcCartData.shipping_cost_total_ex_tax,
+    ctProductItemsRequest = await GraphQLClient.request(
+      INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS,
+      {
+        orderId: orderId,
+        breakLineItems: breakQueryProductInput,
+        orderObject: {
+          id: orderId,
+          user_id: uid,
+          bc_order_id: bcOrderId,
+          subtotal: bcCartData.subtotal_ex_tax,
+          discount_total: 0,
+          tax_total: bcCartData.tax_total,
+          grand_total: bcCartData.grand_total,
+          shipping_total: bcCartData.shipping_cost_total_ex_tax,
+        },
       }
-    });
+    );
   } catch (e) {
     functions.logger.log(e);
 
-       // if db update failed, undo reservation (TODO: is this right, even if payment went through?)
-       await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
-        lineItems: breakQueryProductInput
-      });
-    
+    // if db update failed, undo reservation (TODO: is this right, even if payment went through?)
+    await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
+      lineItems: breakQueryProductInput,
+    });
+
     throw new functions.https.HttpsError(
       "internal",
       "Could not create order in our database"
@@ -327,20 +327,20 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
    * Follow purchased breaks
    */
   try {
-    GraphQLClient.request(SAVE_PURCHASED_BREAKS,{
-      objects:
-      ctPurchasedBreaks
+    GraphQLClient.request(SAVE_PURCHASED_BREAKS, {
+      objects: ctPurchasedBreaks
         // remove dupes here, in the future there will be a db constraint,
         // but still good to avoid bad inserts
-        .filter((breakId, index, breakIds) => breakIds.indexOf(breakId) === index)
-        .map( breakId => {
+        .filter(
+          (breakId, index, breakIds) => breakIds.indexOf(breakId) === index
+        )
+        .map((breakId) => {
           return {
             break_id: breakId,
-            user_id: uid
-          }
-    })
-  })
-
+            user_id: uid,
+          };
+        }),
+    });
   } catch (e) {
     functions.logger.log(e);
   }
@@ -348,5 +348,4 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   return {
     message: "Order created",
   };
-
 });
