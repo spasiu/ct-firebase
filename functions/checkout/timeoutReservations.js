@@ -22,7 +22,7 @@ const EXPIRE_UNUSED_RESERVATIONS = gql`
 
 exports.scheduledFunction = functions.pubsub
   .schedule("every 2 minutes")
-  .onRun(async (context) => {
+  .onRun(async () => {
     try {
       await GraphQLClient.request(EXPIRE_UNUSED_RESERVATIONS, {
         cutOff: moment(new Date()).subtract(5, "minutes").toISOString(),
