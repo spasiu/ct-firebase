@@ -17,9 +17,10 @@
     "@mux/mux-node": "^3.2.3",
     "axios": "^0.21.1",
     "firebase-admin": "^9.8.0",
-    "firebase-functions": "^3.14.1",
+    "firebase-functions": "^3.16.0",
     "graphql": "^15.6.0",
     "graphql-request": "^3.5.0",
+    "moment": "^2.29.1",
     "uuid": "^8.3.2"
   },
   "devDependencies": {
