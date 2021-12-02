@@ -31,8 +31,9 @@ exports.createEvent = functions.https.onCall(async (data, context) => {
       },
       data: { label: streamName, streams: [{ streamName }]}
     });
+
     if (millicastResponse.data.status !== "success") {
-      const rdata = JSON.stringify(millicastResponse.data); 
+      const rdata = JSON.stringify(millicastResponse.data);
       throw new Error(`Failed to create publishing token ${rdata}`);
     }
   } catch (error) {
@@ -51,8 +52,8 @@ exports.createEvent = functions.https.onCall(async (data, context) => {
       image,
       start_time,
       user_id,
-      streamName,
-      token
+      stream_name: streamName,
+      publishing_token: token
     }
   });
 
