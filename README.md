@@ -1,6 +1,6 @@
 # C&T Firebase
 
-When initializing a new instance of the C&T Firebase project, make sure that the `functions/config/admins.js` file contains the emails of administrators you want to initialize
+When initializing a new instance of the C&T Firebase project, make sure that the `functions/config/admins.js` file contains the emails of administrators you want to initialize.
 
 ## Prerequisites
 
@@ -47,6 +47,6 @@ Local environment setup:
 
 ## Resources
 
-Adding environment variables to firebase: https://firebase.google.com/docs/functions/config-env
-
-Getting Google Application Credentials file: https://cloud.google.com/docs/authentication/getting-started
+- [Firebase CLI cheatsheet](https://dev.to/rajeshkumaravel/google-firebase-functions-setting-and-accessing-environment-variable-1gn2)
+- Adding environment variables to firebase: https://firebase.google.com/docs/functions/config-env
+- Getting Google Application Credentials file: https://cloud.google.com/docs/authentication/getting-started
