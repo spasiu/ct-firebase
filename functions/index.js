@@ -35,4 +35,7 @@ module.exports = {
   ...require("./checkout/createOrder"),
   ...require("./checkout/addAddress"),
   ...require("./checkout/timeoutReservations"),
+
+  // Events
+  ...require("./events/createEvent")
 };
