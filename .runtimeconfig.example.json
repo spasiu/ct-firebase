@@ -16,10 +16,6 @@
       "IOSSecret": "<IOS SECRET>",
       "AndroidSecret": "<ANDROID SECRET>"
     },
-    "mux": {
-      "token": "<TOKEN>",
-      "secret": "<SECRET>"
-    },
     "paysafe": {
       "serverToken": "<SERVER TOKEN>",
       "accountId": "<ACCOUNT ID>",

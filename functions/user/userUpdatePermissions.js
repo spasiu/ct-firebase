@@ -1,7 +1,5 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
-const axios = require("axios");
-const mux = require("@mux/mux-node");
 const { gql } = require("graphql-request");
 const GraphQLClient = require("../lib/graphql");
 const authorize = require("../lib/authorization");
@@ -13,22 +11,6 @@ const UPDATE_USER = gql`
     }
   }
 `;
-
-const UPSERT_STREAM = `
-  mutation UpsertStream($data: Streams_insert_input!) {
-    insert_Streams_one(
-      object: $data
-      on_conflict: {
-        constraint: Streams_user_id_key
-        update_columns: [stream_id, stream_key, stream_url, playback_id]
-      }
-    ) {
-      id
-    }
-  }
-`;
-
-// TODO: Create Mux stream if breaker
 
 exports.userUpdatePermissions = functions.https.onCall(async (data, context) => {
   authorize(context, "admin");
@@ -95,62 +77,7 @@ exports.userUpdatePermissions = functions.https.onCall(async (data, context) => 
     );
   }
 
-  // Create stream if this user is a breaker
-  if (setBreaker) {
-    try {
-      const muxClient = new mux(
-        functions.config().env.mux.token,
-        functions.config().env.mux.secret
-      );
-      const muxLiveStreamResponse =
-        await muxClient.Video.LiveStreams.create({
-          playback_policy: "public",
-          new_asset_settings: { playback_policy: "public" },
-          reduced_latency: true,
-        });
-
-      await admin.firestore().collection("Breakers").doc(uid).set(
-        {
-          muxStreamId: muxLiveStreamResponse.id,
-          streamState: "idle",
-        },
-        { merge: true }
-      );
-
-      // Add stream data to Hasura
-      const ctCreateStreamOptions = {
-        url: functions.config().env.hasura.url,
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        data: {
-          query: UPSERT_STREAM,
-          variables: {
-            data: {
-              user_id: uid,
-              stream_id: muxLiveStreamResponse.id,
-              stream_key: muxLiveStreamResponse.stream_key,
-              playback_id: muxLiveStreamResponse.playback_ids[0].id,
-              stream_url: `https://stream.mux.com/${muxLiveStreamResponse.playback_ids[0].id}.m3u8`,
-            },
-          },
-        },
-      };
-
-      await axios(ctCreateStreamOptions);
-    } catch (e) {
-      console.log(e.response);
-      throw new functions.https.HttpsError(
-        "internal",
-        "Could not create live stream."
-      );
-    }
-  }
-
   // Set role in Hasura
-
   try {
     await GraphQLClient.request(UPDATE_USER, {
       id: uid,
