@@ -206,10 +206,9 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
       },
     },
   };
-console.log("ps: " + psMakePaymentOptions);
+  
   try {
-    const r = await axios(psMakePaymentOptions);
-    console.log("r: "+ r);
+    axios(psMakePaymentOptions);
   } catch (e) {
     functions.logger.log(e.response);
 
