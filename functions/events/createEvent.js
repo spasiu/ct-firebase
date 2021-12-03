@@ -34,14 +34,15 @@ exports.createEvent = functions.https.onCall(async (data, context) => {
 
     if (millicastResponse.data.status !== "success") {
       const rdata = JSON.stringify(millicastResponse.data);
-      throw new Error(`Failed to create publishing token ${rdata}`);
+      throw new Error(`Failure ${rdata}`);
     }
   } catch (error) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      error,
-      { ct_error_code: "create_publishing_token_failed" }
-    );
+      console.error(`Millicast failed to create token ${error}`);
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        error,
+        { ct_error_code: "create_publishing_token_failed" }
+      );
   }
 
   const token = millicastResponse.data.data.token;
@@ -56,6 +57,5 @@ exports.createEvent = functions.https.onCall(async (data, context) => {
       publishing_token: token
     }
   });
-
   return queryResponse.data;
 });
