@@ -26,9 +26,6 @@ exports.addCard = functions.https.onCall(async (data, context) => {
    */
   const response = await GraphQLClient.request(GET_USER_PAYSAFE_ID, { userId: uid })
   if (response.Users_by_pk.paysafe_user_id) {
-    /**
-     * Verify card token
-     */
     const psVerifyCardOptions = {
       url: `${functions.config().env.paysafe.url
         }/cardpayments/v1/accounts/${functions.config().env.paysafe.accountId
@@ -67,11 +64,14 @@ exports.addCard = functions.https.onCall(async (data, context) => {
     };
     try {
       /**
-        * Add card to vault if verified
+      * Verify card token
       */
       const verify = await axios(psVerifyCardOptions)
       if (verify.data.avsResponse === "MATCH") {
         try {
+          /**
+          * Add card to vault if verified
+          */
           return axios(psAddCardOptions).data;
         }
         catch (e) {
