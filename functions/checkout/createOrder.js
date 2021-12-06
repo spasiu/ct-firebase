@@ -22,7 +22,7 @@ const GET_BREAK_PRODUCT_ITEMS_FOR_ORDER = gql`
 
 const INSERT_ORDER_IN_PROCESS = gql`
   mutation InsertProcessingEntry($objects: [order_in_process_insert_input!]!) {
-    insert_items(objects: $objects) {
+    insert_order_in_process(objects: $objects) {
       returning {
         product_id
       }
@@ -94,7 +94,7 @@ const CLEAR_ORDERS_IN_PROCESS = gql`
 `;
 
 const rollbackPurchase = (ctProductItemsRequest) => {
-  const itemIds = ctProductItemsRequest.map(item => item.id);
+  const itemIds = ctProductItemsRequest.BreakProductItems.map(item => item.id);
   return GraphQLClient.request(UNDO_ITEM_RESERVATION, {
     itemIds: itemIds,
   });
@@ -176,8 +176,8 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   ).length;
 
   if (nUnsellableStatuses > 0) {
+    functions.logger.log("AVAILABILITY ERROR")
     await rollbackPurchase(ctProductItemsRequest);
-
     throw new functions.https.HttpsError(
       "failed-precondition",
       nUnsellableStatuses > 1
@@ -194,10 +194,11 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   try {
     await GraphQLClient.request(INSERT_ORDER_IN_PROCESS, 
       {
-        objects: ctProductItemsRequest.map(item => ({product_id: item.id}))
+        objects: ctProductItemsRequest.BreakProductItems.map(item => ({product_id: item.id}))
       }
     );
   } catch (error) {
+    functions.logger.log(`PROCESSING ERROR: ${JSON.stringify(error)}`)
     await rollbackPurchase(ctProductItemsRequest);
     throw new functions.https.HttpsError(
       "failed-precondition",
@@ -217,7 +218,6 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   if (ctPurchasedBreaks.length !== breakQueryProductInput.length) {
     // if not, undo previous reservation
     await rollbackPurchase(ctProductItemsRequest);
-
     throw new functions.https.HttpsError(
       "internal",
       "Checkout items do not match available break items"
