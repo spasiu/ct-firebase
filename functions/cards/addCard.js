@@ -14,7 +14,7 @@ const GET_USER_PAYSAFE_ID = gql`
   }
 `;
 
-exports.addCard = functions.https.onCall((data, context) => {
+exports.addCard = functions.https.onCall(async (data, context) => {
   authorize(context);
 
   const uid = context.auth.uid;
@@ -24,86 +24,83 @@ exports.addCard = functions.https.onCall((data, context) => {
   /**
    * Get user doc
    */
-  return GraphQLClient.request(GET_USER_PAYSAFE_ID, { userId: uid }).then(
-    (response) => {
-      if (response.Users_by_pk.paysafe_user_id) {
-        /**
-         * Verify card token
-         */
-        const psVerifyCardOptions = {
-          url: `${
-            functions.config().env.paysafe.url
-          }/cardpayments/v1/accounts/${
-            functions.config().env.paysafe.accountId
-          }/verifications`,
-          method: "POST",
-          headers: {
-            Authorization: `Basic ${
-              functions.config().env.paysafe.serverToken
-            }`,
-            "Content-Type": "application/json",
-          },
-          data: {
-            card: {
-              paymentToken: singleUseToken,
-            },
-            merchantRefNum: `${uid}-addCard-${Date.now()}`,
-            storedCredential: {
-              type: "RECURRING",
-              occurrence: "INITIAL",
-            },
-          },
-        };
-
-        return axios(psVerifyCardOptions)
-          .then(() => {
-            /**
-             * Add card to vault if verified
-             */
-            const psAddCardOptions = {
-              url: `${
-                functions.config().env.paysafe.url
-              }/customervault/v1/profiles/${
-                response.Users_by_pk.paysafe_user_id
-              }/cards`,
-              method: "POST",
-              headers: {
-                Authorization: `Basic ${
-                  functions.config().env.paysafe.serverToken
-                }`,
-                "Content-Type": "application/json",
-              },
-              data: {
-                singleUseToken,
-                accountId: functions.config().env.paysafe.accountId,
-              },
-            };
-
-            return axios(psAddCardOptions)
-              .then((card) => {
-                return card.data;
-              })
-              .catch((e) => {
-                functions.logger.log(e.response);
-                throw new functions.https.HttpsError(
-                  "internal",
-                  "Could not add card"
-                );
-              });
-          })
-          .catch((e) => {
-            functions.logger.log(e.response);
-            throw new functions.https.HttpsError(
-              "internal",
-              "Could not verify card"
-            );
-          });
+  const response = await GraphQLClient.request(GET_USER_PAYSAFE_ID, { userId: uid })
+  if (response.Users_by_pk.paysafe_user_id) {
+    const psVerifyCardOptions = {
+      url: `${functions.config().env.paysafe.url
+        }/cardpayments/v1/accounts/${functions.config().env.paysafe.accountId
+        }/verifications`,
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${functions.config().env.paysafe.serverToken
+          }`,
+        "Content-Type": "application/json",
+      },
+      data: {
+        card: {
+          paymentToken: singleUseToken,
+        },
+        merchantRefNum: `${uid}-addCard-${Date.now()}`,
+        storedCredential: {
+          type: "RECURRING",
+          occurrence: "INITIAL",
+        },
+      },
+    };
+    const psAddCardOptions = {
+      url: `${functions.config().env.paysafe.url
+        }/customervault/v1/profiles/${response.Users_by_pk.paysafe_user_id
+        }/cards`,
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${functions.config().env.paysafe.serverToken
+          }`,
+        "Content-Type": "application/json",
+      },
+      data: {
+        singleUseToken,
+        accountId: functions.config().env.paysafe.accountId,
+      },
+    };
+    try {
+      /**
+      * Verify card token
+      */
+      const verify = await axios(psVerifyCardOptions)
+      if (verify.data.avsResponse === ("MATCH"||"MATCH_ADDRESS_ONLY"||"MATCH_ZIP_ONLY")) {
+        try {
+          /**
+          * Add card to vault if verified
+          */
+          return axios(psAddCardOptions).data;
+        }
+        catch (e) {
+          functions.logger.log(e.response);
+          throw new functions.https.HttpsError(
+            "internal",
+            "Could not verify card"
+          );
+        }
       } else {
+        console.log(`Error bad avs response: ${verify.data.avsResponse}`);
         throw new functions.https.HttpsError(
           "failed-precondition",
-          "User profile does not exist"
-        );
+          "Failed avs verification",
+          { ct_error_code: verify.data }
+        )
       }
     }
-  );
+    catch (e) {
+      functions.logger.log(e.response);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Could not verify card"
+      );
+    }
+  } else {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "User profile does not exist"
+    );
+  }
 });
