@@ -67,7 +67,7 @@ exports.addCard = functions.https.onCall(async (data, context) => {
       * Verify card token
       */
       const verify = await axios(psVerifyCardOptions)
-      if (verify.data.avsResponse === "MATCH") {
+      if (verify.data.avsResponse === ("MATCH"||"MATCH_ADDRESS_ONLY"||"MATCH_ZIP_ONLY")) {
         try {
           /**
           * Add card to vault if verified
