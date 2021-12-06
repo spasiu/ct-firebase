@@ -82,10 +82,11 @@ exports.addCard = functions.https.onCall(async (data, context) => {
           );
         }
       } else {
-        console.log("Error: Bad avs response");
+        console.log(`Error bad avs response: ${verify.data.avsResponse}`);
         throw new functions.https.HttpsError(
           "failed-precondition",
-          "Failed avs verification"
+          "Failed avs verification",
+          { ct_error_code: verify.data }
         )
       }
     }
