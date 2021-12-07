@@ -176,8 +176,6 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   ).length;
 
   if (nUnsellableStatuses > 0) {
-    functions.logger.log("AVAILABILITY ERROR")
-    await rollbackPurchase(ctProductItemsRequest);
     throw new functions.https.HttpsError(
       "failed-precondition",
       nUnsellableStatuses > 1
@@ -198,8 +196,6 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
       }
     );
   } catch (error) {
-    functions.logger.log(`PROCESSING ERROR: ${JSON.stringify(error)}`)
-    await rollbackPurchase(ctProductItemsRequest);
     throw new functions.https.HttpsError(
       "failed-precondition",
       "Spot is no longer available.",
@@ -385,9 +381,12 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
 
   /**
    * clear completed orders out of orders_in_process
+   *  -- no need to wait for this, as it is semi-passive
+   * cleanup and will be redone on the next pass, if
+   * needs be
    */
   try {
-    await GraphQLClient.request(CLEAR_ORDERS_IN_PROCESS);
+    GraphQLClient.request(CLEAR_ORDERS_IN_PROCESS);
   } catch (e) {
     functions.logger.log(e);
   }
