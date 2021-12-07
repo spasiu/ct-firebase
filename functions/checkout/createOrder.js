@@ -12,6 +12,7 @@ const GET_BREAK_PRODUCT_ITEMS_FOR_ORDER = gql`
     BreakProductItems(where: { _or: $lineItems }) {
       id
       break_id
+      order_id
       Break {
         status
       }
@@ -19,14 +20,28 @@ const GET_BREAK_PRODUCT_ITEMS_FOR_ORDER = gql`
   }
 `;
 
+const INSERT_ORDER_IN_PROCESS = gql`
+  mutation InsertProcessingEntry($objects: [order_in_process_insert_input!]!) {
+    insert_order_in_process(objects: $objects) {
+      returning {
+        product_id
+      }
+    }
+  }
+`;
+
 const UNDO_ITEM_RESERVATION = gql`
-  mutation UndoBreakProductItemReservation(
-    $lineItems: [BreakProductItems_bool_exp!]
-  ) {
+  mutation UndoBreakProductItemReservation( $itemIds: [uuid!]!) {
     update_BreakProductItems(
-      where: { _or: $lineItems }
+      where: { id: {_in: $itemIds} }
       _inc: { quantity: 1 }
-    ) {
+     ) {
+      affected_rows
+    }
+  
+    delete_order_in_process(
+      where: { product_id: {_in: $itemIds} }
+    ){
       affected_rows
     }
   }
@@ -69,6 +84,21 @@ const SAVE_PURCHASED_BREAKS = gql`
     }
   }
 `;
+
+const CLEAR_ORDERS_IN_PROCESS = gql`
+  mutation clearProcessing {
+      delete_order_in_process(where: {BreakProductItems: {order_id: {_is_null: false}}}){
+        affected_rows
+      }
+    }
+`;
+
+const rollbackPurchase = (ctProductItemsRequest) => {
+  const itemIds = ctProductItemsRequest.BreakProductItems.map(item => item.id);
+  return GraphQLClient.request(UNDO_ITEM_RESERVATION, {
+    itemIds: itemIds,
+  });
+};
 
 exports.createOrder = functions.https.onCall(async (data, context) => {
   authorize(context);
@@ -133,26 +163,42 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
 
   /**
    * make sure break is in a sellable state
+   * and that item has not already been purchased
    */
-  const nUnsellableStatuses =
-    ctProductItemsRequest.BreakProductItems
-      .map((productItem) => productItem.Break.status)
-      .filter(
-        (breakStatus) =>
-          breakStatus === "COMPLETED" ||
-          breakStatus === "LIVE" ||
-          breakStatus === "SOLDOUT"
-      ).length;
+  const nUnsellableStatuses = ctProductItemsRequest.BreakProductItems.map(
+    (productItem) => [productItem.Break.status, productItem.order_id]
+  ).filter(
+    ([breakStatus, orderId]) =>
+      breakStatus === "COMPLETED" ||
+      breakStatus === "LIVE" ||
+      breakStatus === "SOLDOUT" ||
+      orderId !== null
+  ).length;
 
   if (nUnsellableStatuses > 0) {
-    await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
-      lineItems: breakQueryProductInput,
-    });
-
     throw new functions.https.HttpsError(
       "failed-precondition",
-      nUnsellableStatuses > 1 ? "Spots are no longer available." :
-                                "Spot is no longer available.",
+      nUnsellableStatuses > 1
+        ? "Spots are no longer available."
+        : "Spot is no longer available.",
+      { ct_error_code: "purchase_no_longer_available" }
+    );
+  }
+
+  /**
+   * prevent duplicate purchases by registering first purchase
+   * to orders_in_process db table
+   */
+  try {
+    await GraphQLClient.request(INSERT_ORDER_IN_PROCESS, 
+      {
+        objects: ctProductItemsRequest.BreakProductItems.map(item => ({product_id: item.id}))
+      }
+    );
+  } catch (error) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Spot is no longer available.",
       { ct_error_code: "purchase_no_longer_available" }
     );
   }
@@ -160,18 +206,14 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   /**
    * Verify products exist in cart and in our database
    */
-  const ctPurchasedBreaks =
-    ctProductItemsRequest.BreakProductItems.map(
-      (_) => _.break_id
-    );
+  const ctPurchasedBreaks = ctProductItemsRequest.BreakProductItems.map(
+    (_) => _.break_id
+  );
 
   // Ensure number of break product items available in our databae matches length of BC line items
   if (ctPurchasedBreaks.length !== breakQueryProductInput.length) {
     // if not, undo previous reservation
-    await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
-      lineItems: breakQueryProductInput,
-    });
-
+    await rollbackPurchase(ctProductItemsRequest);
     throw new functions.https.HttpsError(
       "internal",
       "Checkout items do not match available break items"
@@ -208,14 +250,12 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   };
 
   try {
-    axios(psMakePaymentOptions);
+    await axios(psMakePaymentOptions);
   } catch (e) {
     functions.logger.log(e.response);
 
     // if payment failed, undo reservation
-    await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
-      lineItems: breakQueryProductInput,
-    });
+    await rollbackPurchase(ctProductItemsRequest);
 
     throw new functions.https.HttpsError(
       "internal",
@@ -244,9 +284,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     functions.logger.log(e.response);
 
     // if bc order failed, undo reservation
-    await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
-      lineItems: breakQueryProductInput,
-    });
+    await rollbackPurchase(ctProductItemsRequest);
 
     throw new functions.https.HttpsError(
       "internal",
@@ -278,9 +316,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     functions.logger.log(e.response);
 
     // if bc order failed, undo reservation
-    await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
-      lineItems: breakQueryProductInput,
-    });
+    await rollbackPurchase(ctProductItemsRequest);
 
     throw new functions.https.HttpsError(
       "internal",
@@ -313,9 +349,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     functions.logger.log(e);
 
     // if db update failed, undo reservation (TODO: is this right, even if payment went through?)
-    await GraphQLClient.request(UNDO_ITEM_RESERVATION, {
-      lineItems: breakQueryProductInput,
-    });
+    await rollbackPurchase(ctProductItemsRequest);
 
     throw new functions.https.HttpsError(
       "internal",
@@ -341,6 +375,18 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
           };
         }),
     });
+  } catch (e) {
+    functions.logger.log(e);
+  }
+
+  /**
+   * clear completed orders out of orders_in_process
+   *  -- no need to wait for this, as it is semi-passive
+   * cleanup and will be redone on the next pass, if
+   * needs be
+   */
+  try {
+    GraphQLClient.request(CLEAR_ORDERS_IN_PROCESS);
   } catch (e) {
     functions.logger.log(e);
   }
