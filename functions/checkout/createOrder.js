@@ -254,7 +254,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   };
 
   try {
-    axios(psMakePaymentOptions);
+    await axios(psMakePaymentOptions);
   } catch (e) {
     functions.logger.log(e.response);
 
