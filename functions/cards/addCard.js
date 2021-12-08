@@ -67,7 +67,8 @@ exports.addCard = functions.https.onCall(async (data, context) => {
       * Verify card token
       */
       const verify = await axios(psVerifyCardOptions)
-      if (verify.data.avsResponse === ("MATCH"||"MATCH_ADDRESS_ONLY"||"MATCH_ZIP_ONLY")) {
+      if ((verify.data.avsResponse === "MATCH"||"MATCH_ADDRESS_ONLY"||"MATCH_ZIP_ONLY")
+      && verify.data.cvvVerification === "MATCH") {
         try {
           /**
           * Add card to vault if verified
@@ -78,14 +79,15 @@ exports.addCard = functions.https.onCall(async (data, context) => {
           functions.logger.log(e.response);
           throw new functions.https.HttpsError(
             "internal",
-            "Could not verify card"
+            "Could not add card card",
+            { ct_error_code: e.response }
           );
         }
       } else {
-        console.log(`Error bad avs response: ${verify.data.avsResponse}`);
+        console.log(`Error bad avs/cvv response: ${verify.data.avsResponse} / ${verify.data.cvvVerification}`);
         throw new functions.https.HttpsError(
           "failed-precondition",
-          "Failed avs verification",
+          "Could not add card card",
           { ct_error_code: verify.data }
         )
       }
