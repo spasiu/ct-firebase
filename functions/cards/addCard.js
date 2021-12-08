@@ -67,7 +67,8 @@ exports.addCard = functions.https.onCall(async (data, context) => {
       * Verify card token
       */
       const verify = await axios(psVerifyCardOptions)
-      if (verify.data.avsResponse === ("MATCH"||"MATCH_ADDRESS_ONLY"||"MATCH_ZIP_ONLY")) {
+      if ((verify.data.avsResponse === "MATCH"||"MATCH_ADDRESS_ONLY"||"MATCH_ZIP_ONLY")
+      && verify.data.cvvVerification === "MATCH") {
         try {
           /**
           * Add card to vault if verified
@@ -78,15 +79,15 @@ exports.addCard = functions.https.onCall(async (data, context) => {
           functions.logger.log(e.response);
           throw new functions.https.HttpsError(
             "internal",
-            "Could not verify card"
+            "Could not add card",
+            { ct_error_code: "could_not_add_card" }
           );
         }
       } else {
-        console.log(`Error bad avs response: ${verify.data.avsResponse}`);
         throw new functions.https.HttpsError(
           "failed-precondition",
-          "Failed avs verification",
-          { ct_error_code: verify.data }
+          "Could not add card",
+          { ct_error_code: verify.data.cvvVerification === "MATCH" ? "avs_mismatch" : "cvv_mismatch" }
         )
       }
     }
@@ -94,7 +95,8 @@ exports.addCard = functions.https.onCall(async (data, context) => {
       functions.logger.log(e.response);
       throw new functions.https.HttpsError(
         "internal",
-        "Could not verify card"
+        "Could not verify card",
+        { ct_error_code: "could_not_verify_card"}
       );
     }
   } else {
