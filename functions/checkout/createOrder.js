@@ -33,7 +33,7 @@ const INSERT_ORDER_IN_PROCESS = gql`
 const UNDO_ITEM_RESERVATION = gql`
   mutation UndoBreakProductItemReservation( $itemIds: [uuid!]!) {
     update_BreakProductItems(
-      where: { id: {_in: $itemIds} }
+      where: { _and: [{id: {_in: $itemIds}}, {order_id: {_is_null: true}}] }
       _inc: { quantity: 1 }
      ) {
       affected_rows
@@ -165,15 +165,15 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
    * make sure break is in a sellable state
    * and that item has not already been purchased
    */
-  const nUnsellableStatuses = ctProductItemsRequest.BreakProductItems.map(
-    (productItem) => [productItem.Break.status, productItem.order_id]
-  ).filter(
-    ([breakStatus, orderId]) =>
-      breakStatus === "COMPLETED" ||
-      breakStatus === "LIVE" ||
-      breakStatus === "SOLDOUT" ||
-      orderId !== null
-  ).length;
+   const nUnsellableStatuses =
+   ctProductItemsRequest.BreakProductItems
+     .map((productItem) => productItem.Break.status)
+     .filter(
+       (breakStatus) =>
+         breakStatus === "COMPLETED" ||
+         breakStatus === "LIVE" ||
+         breakStatus === "SOLDOUT"
+     ).length;
 
   if (nUnsellableStatuses > 0) {
     throw new functions.https.HttpsError(
@@ -181,6 +181,21 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
       nUnsellableStatuses > 1
         ? "Spots are no longer available."
         : "Spot is no longer available.",
+      { ct_error_code: "purchase_no_longer_available" }
+    );
+  }
+
+  /**
+   * check if any selected items have already been purchased 
+   */
+  const alreadySold = ctProductItemsRequest.BreakProductItems
+    .filter(item => item.order_id !== null);
+
+  if (alreadySold.length > 0 ) {
+    rollbackPurchase(ctProductItemsRequest);
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Spot is no longer available.",
       { ct_error_code: "purchase_no_longer_available" }
     );
   }
