@@ -30,6 +30,16 @@ const INSERT_ORDER_IN_PROCESS = gql`
   }
 `;
 
+const CHECK_FOR_ORDER_IN_PROCESS = gql`
+  query CheckForFailedOrder($productIds: [uuid!]!) {
+    order_in_process(
+      where: {product_id: {_in: $productIds}}
+    ){
+      product_id
+    }
+  }
+`
+
 const UNDO_ITEM_RESERVATION = gql`
   mutation UndoBreakProductItemReservation( $itemIds: [uuid!]!) {
     update_BreakProductItems(
@@ -211,9 +221,23 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
       }
     );
   } catch (error) {
+    /**
+     * query for failed item(s) and rollback others
+     * to prevent them from being erroneously reserved
+     */
+    const failed = await GraphQLClient.request(
+      CHECK_FOR_ORDER_IN_PROCESS,
+      ctProductItemsRequest.BreakProductItems.map(item => item.id)
+    );
+    const failedItems = failed.order_in_process.map(item => item.product_id);
+    
+    rollbackPurchase(
+      ctProductItemsRequest.BreakProductItems.filter(item => !failedItems.includes(item.id))
+    );
+
     throw new functions.https.HttpsError(
       "failed-precondition",
-      "Spot is no longer available.",
+      `${failedItems} no longer available.`,
       { ct_error_code: "purchase_no_longer_available" }
     );
   }
