@@ -207,8 +207,8 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     );
   } catch (error) {
     /**
-     * query for failed item and rollback others
-     * to prevent them from being reserved erroneously
+     * query for failed item(s) and rollback others
+     * to prevent them from being erroneously reserved
      */
     const failed = await GraphQLClient.request(
       CHECK_FOR_ORDER_IN_PROCESS,
