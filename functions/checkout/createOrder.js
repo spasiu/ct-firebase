@@ -75,7 +75,10 @@ const INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS = gql`
 
     update_BreakProductItems(
       where: { _or: $breakLineItems }
-      _set: { order_id: $orderId }
+      _set: {
+        order_id: $orderId,
+        quantity: 0
+      }
     ) {
       returning {
         id
@@ -229,11 +232,13 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
       CHECK_FOR_ORDER_IN_PROCESS,
       ctProductItemsRequest.BreakProductItems.map(item => item.id)
     );
-    const failedItems = failed.order_in_process.map(item => item.product_id);
-    
-    rollbackPurchase(
-      ctProductItemsRequest.BreakProductItems.filter(item => !failedItems.includes(item.id))
-    );
+
+    // remove failed items from the rollback list
+    const failedItemIds = failed.order_in_process.map(item => item.product_id);
+    const failedItems = ctProductItemsRequest.BreakProductItems.filter(item => !failedItemIds.includes(item.id));
+    ctProductItemsRequest.BreakProductItems = failedItems;
+
+    rollbackPurchase(ctProductItemsRequest);
 
     throw new functions.https.HttpsError(
       "failed-precondition",
