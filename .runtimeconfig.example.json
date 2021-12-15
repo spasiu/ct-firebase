@@ -1,5 +1,8 @@
 {
   "env": {
+    "millicast": {
+      "secret": "<MILLICAST_API_SECRET>"
+    },
     "bigCommerce": {
       "storeHash": "<STORE HASH>",
       "url": "<V3 API URL>",
@@ -15,10 +18,6 @@
     "intercom": {
       "IOSSecret": "<IOS SECRET>",
       "AndroidSecret": "<ANDROID SECRET>"
-    },
-    "mux": {
-      "token": "<TOKEN>",
-      "secret": "<SECRET>"
     },
     "paysafe": {
       "serverToken": "<SERVER TOKEN>",

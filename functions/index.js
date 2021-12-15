@@ -36,6 +36,6 @@ module.exports = {
   ...require("./checkout/addAddress"),
   ...require("./checkout/timeoutReservations"),
 
-  // Video & Streams
-  ...require("./video/muxWebhook"),
+  // Events
+  ...require("./events/createEvent")
 };
