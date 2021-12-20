@@ -107,9 +107,8 @@ const CLEAR_ORDERS_IN_PROCESS = gql`
 `;
 
 const rollbackPurchase = (ctProductItemsRequest) => {
-  const itemIds = ctProductItemsRequest.BreakProductItems.map(item => item.id);
   return GraphQLClient.request(UNDO_ITEM_RESERVATION, {
-    itemIds: itemIds,
+    itemIds: ctProductItemsRequest.BreakProductItems.map(item => item.id)
   });
 };
 
@@ -230,7 +229,9 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
      */
     const failed = await GraphQLClient.request(
       CHECK_FOR_ORDER_IN_PROCESS,
-      ctProductItemsRequest.BreakProductItems.map(item => item.id)
+      {
+        productIds: ctProductItemsRequest.BreakProductItems.map(item => item.id)
+      }
     );
 
     // remove failed items from the rollback list
