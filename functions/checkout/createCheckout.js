@@ -25,6 +25,7 @@ exports.createCheckout = functions.https.onCall(async (data, context) => {
       first_name: firstName,
       last_name: lastName,
       address,
+      coupon
     } = data;
 
     const bcCreateCartOptions = {
@@ -45,6 +46,34 @@ exports.createCheckout = functions.https.onCall(async (data, context) => {
     const bcCreateCart = await axios(bcCreateCartOptions);
     const cartId = bcCreateCart.data.data.id;
     
+    if (coupon) {
+      const bcSetCouponOptions = {
+        url: `${
+          functions.config().env.bigCommerce.url
+        }/checkouts/${cartId}/coupons`,
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "X-Auth-Client":
+            functions.config().env.bigCommerce.clientId,
+          "X-Auth-Token":
+            functions.config().env.bigCommerce.accessToken,
+        },
+        data: { coupon_code: coupon },
+      };
+      try {
+         const bcSetCoupon = await axios(bcSetCouponOptions);
+         console.log(JSON.stringify(bcSetCoupon.data));
+      } catch (e) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "invalid coupon code.",
+          { ct_error_code: "invalid_coupon_code" }
+        );
+      }
+    }
+
     // If address exists, return full checkout
     if (address) {
       const consignmentLineItems =
