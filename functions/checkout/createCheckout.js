@@ -183,7 +183,8 @@ exports.createCheckout = functions.https.onCall(async (data, context) => {
   } else {
     throw new functions.https.HttpsError(
       "failed-precondition",
-      "User doc does not exist."
+      "User doc does not exist.",
+      { ct_error_code: "user_doc_does_not_exist" }
     );
   }
 });
