@@ -61,8 +61,7 @@ exports.createCheckout = functions.https.onCall(async (data, context) => {
         data: { coupon_code: coupon },
       };
       try {
-        const bcSetCoupon = await axios(bcSetCouponOptions);
-        console.log(JSON.stringify(bcSetCoupon.data));
+        await axios(bcSetCouponOptions);
       } catch (e) {
         throw new functions.https.HttpsError(
           "failed-precondition",
