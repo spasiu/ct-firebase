@@ -15,6 +15,7 @@ const GET_BREAK_PRODUCT_ITEMS_FOR_ORDER = gql`
       order_id
       Break {
         status
+        event_id
       }
     }
   }
@@ -87,12 +88,21 @@ const INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS = gql`
   }
 `;
 
-const SAVE_PURCHASED_BREAKS = gql`
-  mutation SavePurchasedBreaks($objects: [SaveBreak_insert_input!]!) {
-    insert_SaveBreak(objects: $objects) {
+const SAVE_PURCHASED_BREAKS_AND_EVENTS = gql`
+  mutation SavePurchasedBreaks(
+    $breakObjects: [SaveBreak_insert_input!]!,
+    $eventObjects: [SaveEvent_insert_input!]!
+  ) {
+    insert_SaveBreak(objects: $breakObjects) {
       returning {
         user_id
         break_id
+      }
+    }
+    insert_SaveEvent(objects: $eventObjects) {
+      returning {
+        user_id
+        event_id
       }
     }
   }
@@ -248,15 +258,8 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     );
   }
 
-  /**
-   * Verify products exist in cart and in our database
-   */
-  const ctPurchasedBreaks = ctProductItemsRequest.BreakProductItems.map(
-    (_) => _.break_id
-  );
-
   // Ensure number of break product items available in our databae matches length of BC line items
-  if (ctPurchasedBreaks.length !== breakQueryProductInput.length) {
+  if (ctProductItemsRequest.BreakProductItems.length !== breakQueryProductInput.length) {
     // if not, undo previous reservation
     await rollbackPurchase(ctProductItemsRequest);
     throw new functions.https.HttpsError(
@@ -373,7 +376,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
    * Create Hasura Order
    */
   try {
-    ctProductItemsRequest = await GraphQLClient.request(
+    await GraphQLClient.request(
       INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS,
       {
         orderId: orderId,
@@ -403,22 +406,38 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   }
 
   /**
-   * Follow purchased breaks
+   * Follow purchased breaks and events
    */
   try {
-    GraphQLClient.request(SAVE_PURCHASED_BREAKS, {
-      objects: ctPurchasedBreaks
-        // remove dupes here, in the future there will be a db constraint,
-        // but still good to avoid bad inserts
-        .filter(
-          (breakId, index, breakIds) => breakIds.indexOf(breakId) === index
-        )
-        .map((breakId) => {
-          return {
-            break_id: breakId,
-            user_id: uid,
-          };
-        }),
+    const breakObjects = ctProductItemsRequest.BreakProductItems
+      .map(item => (item.break_id))
+      // remove dupes
+      .filter(
+        (breakId, index, breakIds) => breakIds.indexOf(breakId) === index
+      )
+      .map((breakId) => {
+        return {
+          break_id: breakId,
+          user_id: uid,
+        };
+      });
+
+    const eventObjects = ctProductItemsRequest.BreakProductItems
+      .map(item => (item.Break.event_id))
+      // remove dupes
+      .filter(
+        (eventId, index, eventIds) => eventIds.indexOf(eventId) === index
+      )
+      .map((eventId) => {
+        return {
+          event_id: eventId,
+          user_id: uid,
+        };
+      });  
+
+    GraphQLClient.request(SAVE_PURCHASED_BREAKS_AND_EVENTS, {
+      breakObjects: breakObjects,
+      eventObjects: eventObjects
     });
   } catch (e) {
     functions.logger.log(e);
