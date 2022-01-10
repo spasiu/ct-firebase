@@ -271,46 +271,47 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   /**
    * Process payment
    */
-  const psMakePaymentOptions = {
-    url: `${functions.config().env.paysafe.url}/cardpayments/v1/accounts/${
-      functions.config().env.paysafe.accountId
-    }/auths`,
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${functions.config().env.paysafe.serverToken}`,
-      "Content-Type": "application/json",
-    },
-    data: {
-      card: {
-        paymentToken: paymentToken,
+  if (bcCartData.grand_total > 0) {
+    const psMakePaymentOptions = {
+      url: `${functions.config().env.paysafe.url}/cardpayments/v1/accounts/${
+        functions.config().env.paysafe.accountId
+      }/auths`,
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${functions.config().env.paysafe.serverToken}`,
+        "Content-Type": "application/json",
       },
-      merchantRefNum: orderId,
-      amount: bcCartData.grand_total.toFixed(2).replace(".", ""),
-      settleWithAuth: true,
-      storedCredential: {
-        type: "RECURRING",
-        occurrence: "SUBSEQUENT",
+      data: {
+        card: {
+          paymentToken: paymentToken,
+        },
+        merchantRefNum: orderId,
+        amount: bcCartData.grand_total.toFixed(2).replace(".", ""),
+        settleWithAuth: true,
+        storedCredential: {
+          type: "RECURRING",
+          occurrence: "SUBSEQUENT",
+        },
+        merchantDescriptor: {
+          dynamicDescriptor: "Cards&Treasure",
+        },
       },
-      merchantDescriptor: {
-        dynamicDescriptor: "Cards&Treasure",
-      },
-    },
-  };
+    };
 
-  try {
-    await axios(psMakePaymentOptions);
-  } catch (e) {
-    functions.logger.log(e.response);
+    try {
+      await axios(psMakePaymentOptions);
+    } catch (e) {
+      functions.logger.log(e.response);
 
-    // if payment failed, undo reservation
-    await rollbackPurchase(ctProductItemsRequest);
+      // if payment failed, undo reservation
+      await rollbackPurchase(ctProductItemsRequest);
 
-    throw new functions.https.HttpsError(
-      "internal",
-      "Could not complete PaySafe payment"
-    );
+      throw new functions.https.HttpsError(
+        "internal",
+        "Could not complete PaySafe payment"
+      );
+    }
   }
-
   /**
    * Create BC order
    */
