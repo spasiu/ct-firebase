@@ -45,7 +45,7 @@ const UNDO_ITEM_RESERVATION = gql`
   mutation UndoBreakProductItemReservation( $itemIds: [uuid!]!) {
     update_BreakProductItems(
       where: { _and: [{id: {_in: $itemIds}}, {order_id: {_is_null: true}}] }
-      _inc: { quantity: 1 }
+      _set: { quantity: 1 }
      ) {
       affected_rows
     }
