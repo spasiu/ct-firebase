@@ -119,7 +119,7 @@ exports.addCard = functions.https.onCall(async (data, context) => {
            * Add card to vault if verified
            */
           const newCard = await axios(psAddCardOptions);
-          return newCard.data
+          return newCard.data;
         } catch (e) {
           functions.logger.log(e.response);
           throw new functions.https.HttpsError(
