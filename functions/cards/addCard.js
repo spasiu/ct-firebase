@@ -89,11 +89,10 @@ exports.addCard = functions.https.onCall(async (data, context) => {
        * Verify card token
        */
       const verify = await axios(psVerifyCardOptions);
+      const avs = verify.data.avsResponse;
       if (
-        (verify.data.avsResponse === "MATCH" ||
-          "MATCH_ADDRESS_ONLY" ||
-          "MATCH_ZIP_ONLY") &&
-        verify.data.cvvVerification === "MATCH"
+      (avs === "MATCH" || avs === "MATCH_ADDRESS_ONLY" || avs === "MATCH_ZIP_ONLY") &&
+      verify.data.cvvVerification === "MATCH"
       ) {
         try {
           await GraphQLClient.request(ADD_BILLING_ADDRESS, {
