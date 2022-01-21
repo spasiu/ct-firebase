@@ -16,6 +16,7 @@ const GET_BREAK_DETAILS_FOR_LIVE = gql`
         title
         Order {
           id
+          bc_order_id
           User {
             id
             username
@@ -77,6 +78,7 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
         user_id: item.Order.User.id,
         username: item.Order.User.username,
         image: item.Order.User.image,
+        bc_order_id: item.Order.bc_order_id
       }))
     );
   }
@@ -89,6 +91,7 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
         user_id: item.Order.User.id,
         username: item.Order.User.username,
         image: item.Order.User.image,
+        bc_order_id: item.Order.bc_order_id,
         items: [],
       }))
     );
@@ -105,6 +108,7 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
       user_id: item.Order.User.id,
       username: item.Order.User.username,
       image: item.Order.User.image,
+      bc_order_id: item.Order.bc_order_id,
       items: [item.title],
     }));
   }
