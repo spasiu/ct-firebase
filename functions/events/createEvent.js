@@ -29,7 +29,7 @@ exports.createEvent = functions.https.onCall(async (data, context) => {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${MILLICAST_API_SECRET}`,
       },
-      data: { label: streamName, streams: [{ streamName }]}
+      data: { label: streamName, record: true, streams: [{ streamName }]}
     });
 
     if (millicastResponse.data.status !== "success") {
