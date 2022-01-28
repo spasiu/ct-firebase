@@ -48,16 +48,19 @@ exports.getCards = functions.https.onCall((data, context) => {
             return cards.data;
           })
           .catch((e) => {
-            functions.logger.log(e.response);
+            functions.logger.log(e, { status: e.response.status, data: e.response.data, userId: uid });
             throw new functions.https.HttpsError(
               "internal",
-              "Could not fetch cards"
+              "Could not fetch cards",
+              { ct_error_code: "user_cards_not_retreived" }
             );
           });
       } else {
+        functions.logger.log(new Error(`User Paysafe profile does not exist, user: ${uid}`));
         throw new functions.https.HttpsError(
           "failed-precondition",
-          "User profile does not exist"
+          "User Paysafe profile does not exist",
+          { ct_error_code: "user_paysafe_profile_does_not_exist" }
         );
       }
     }

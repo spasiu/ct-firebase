@@ -119,7 +119,7 @@ exports.addCard = functions.https.onCall(async (data, context) => {
           const newCard = await axios(psAddCardOptions);
           return newCard.data;
         } catch (e) {
-          functions.logger.log(new Error(`${e.response} user: ${uid}`));
+          functions.logger.log(e, { status: e.response.status, data: e.response.data, userId: uid });
           throw new functions.https.HttpsError(
             "internal",
             "Could not add card",
@@ -132,13 +132,11 @@ exports.addCard = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError(
           "failed-precondition",
           "Could not add card",
-          {
-            ct_error_code: mismatch,
-          }
+          { ct_error_code: mismatch }
         );
       }
     } catch (e) {
-      functions.logger.log(new Error(`${e.response} user: ${uid}`));
+      functions.logger.log(e, { status: e.response.status, data: e.response.data, userId: uid });
       throw new functions.https.HttpsError(
         "internal",
         "Could not verify card",
