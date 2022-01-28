@@ -50,16 +50,19 @@ exports.removeCard = functions.https.onCall((data, context) => {
             return card.data;
           })
           .catch((e) => {
-            functions.logger.log(e.response);
+            functions.logger.log(e, { status: e.response.status, data: e.response.data, userId: uid });
             throw new functions.https.HttpsError(
               "internal",
-              "Could not remove card"
+              "Could not remove card",
+              { ct_error_code: "user_card_not_deleted" }
             );
           });
       } else {
+        functions.logger.log(new Error(`User Paysafe profile does not exist, user: ${uid}`));
         throw new functions.https.HttpsError(
           "failed-precondition",
-          "User profile does not exist"
+          "User Paysafe profile does not exist",
+          { ct_error_code: "user_paysafe_profile_does_not_exist" }
         );
       }
     }
