@@ -109,8 +109,7 @@ exports.addCard = functions.https.onCall(async (data, context) => {
             },
           });
         } catch (e) {
-          console.log("Could not add billing address to user.");
-          functions.logger.log(e.response);
+          functions.logger.log(new Error(`could not add billing address to user addresses, ${e.response} user: ${uid}`));
         }
 
         try {
@@ -120,7 +119,7 @@ exports.addCard = functions.https.onCall(async (data, context) => {
           const newCard = await axios(psAddCardOptions);
           return newCard.data;
         } catch (e) {
-          functions.logger.log(e.response);
+          functions.logger.log(new Error(`${e.response} user: ${uid}`));
           throw new functions.https.HttpsError(
             "internal",
             "Could not add card",
@@ -128,19 +127,18 @@ exports.addCard = functions.https.onCall(async (data, context) => {
           );
         }
       } else {
+        const mismatch = verify.data.cvvVerification === "MATCH" ? "avs_mismatch" : "cvv_mismatch"
+        functions.logger.log(new Error(`${mismatch} user: ${uid}`));
         throw new functions.https.HttpsError(
           "failed-precondition",
           "Could not add card",
           {
-            ct_error_code:
-              verify.data.cvvVerification === "MATCH"
-                ? "avs_mismatch"
-                : "cvv_mismatch",
+            ct_error_code: mismatch,
           }
         );
       }
     } catch (e) {
-      functions.logger.log(e.response);
+      functions.logger.log(new Error(`${e.response} user: ${uid}`));
       throw new functions.https.HttpsError(
         "internal",
         "Could not verify card",
@@ -148,9 +146,11 @@ exports.addCard = functions.https.onCall(async (data, context) => {
       );
     }
   } else {
+    functions.logger.log(new Error(`User Paysafe profile does not exist, user: ${uid}`));
     throw new functions.https.HttpsError(
       "failed-precondition",
-      "User profile does not exist"
+      "User Paysafe profile does not exist",
+      { ct_error_code: "user_paysafe_profile_does_not_exist" }
     );
   }
 });
