@@ -42,8 +42,8 @@ exports.createCheckout = functions.https.onCall(async (data, context) => {
         line_items: products,
       },
     };
-    try {
 
+    try {
       const bcCreateCart = await axios(bcCreateCartOptions);
       const cartId = bcCreateCart.data.data.id;
 
@@ -61,16 +61,7 @@ exports.createCheckout = functions.https.onCall(async (data, context) => {
           },
           data: { coupon_code: coupon },
         };
-        try {
-          await axios(bcSetCouponOptions);
-        } catch (e) {
-          functions.logger.log(e, { status: e.response.status, data: e.response.data, userId: uid });
-          throw new functions.https.HttpsError(
-            "failed-precondition",
-            "invalid coupon code.",
-            { ct_error_code: "invalid_coupon_code" }
-          );
-        }
+        await axios(bcSetCouponOptions);
       }
 
       // If address exists, return full checkout
@@ -176,15 +167,18 @@ exports.createCheckout = functions.https.onCall(async (data, context) => {
         return bcCheckout.data;
       }
     } catch (e) {
-      functions.logger.log(e, { status: e.response.status, data: e.response.data, userId: uid });
+      functions.logger.log({ error: e, userId: uid });
+      const couponError = e.config && e.config.url && e.config.url.slice(e.config.url.length - 7, e.config.url.length) === "coupons";
       throw new functions.https.HttpsError(
         "failed-precondition",
-        "could not complete checkout.",
-        { ct_error_code: "could_not_complete_checkout" }
+        couponError ? "invalid coupon code." : "could not complete checkout.",
+        { ct_error_code: couponError ? "invalid_coupon_code" : "could_not_complete_checkout" }
       );
     }
   } else {
-    functions.logger.log(new Error(`User BigCommerce profile does not exist, user: ${uid}`));
+    functions.logger.log(
+      new Error(`User BigCommerce profile does not exist, user: ${uid}`)
+    );
     throw new functions.https.HttpsError(
       "failed-precondition",
       "User doc does not exist.",
