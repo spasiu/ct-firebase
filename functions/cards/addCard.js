@@ -49,7 +49,16 @@ exports.addCard = functions.https.onCall(async (data, context) => {
   const response = await GraphQLClient.request(GET_USER_PAYSAFE_ID, {
     userId: uid,
   });
-  if (response.Users_by_pk.paysafe_user_id) {
+  if (!response.Users_by_pk.paysafe_user_id) {
+    functions.logger.log(new Error(`User Paysafe profile does not exist, user: ${uid}`));
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "User Paysafe profile does not exist",
+      { ct_error_code: "user_profile_missing" }
+    );
+  }
+
+  try {
     const psVerifyCardOptions = {
       url: `${functions.config().env.paysafe.url}/cardpayments/v1/accounts/${
         functions.config().env.paysafe.accountId
@@ -84,71 +93,46 @@ exports.addCard = functions.https.onCall(async (data, context) => {
         accountId: functions.config().env.paysafe.accountId,
       },
     };
-    try {
-      /**
-       * Verify card token
-       */
-      const verify = await axios(psVerifyCardOptions);
-      const avs = verify.data.avsResponse;
-      if (
-      (avs === "MATCH" || avs === "MATCH_ADDRESS_ONLY" || avs === "MATCH_ZIP_ONLY") &&
-      verify.data.cvvVerification === "MATCH"
-      ) {
-        try {
-          await GraphQLClient.request(ADD_BILLING_ADDRESS, {
-            address: {
-              line1: verify.data.billingDetails.street,
-              line2: verify.data.billingDetails.street2,
-              postal_zip_code: verify.data.billingDetails.zip,
-              state_province_region: verify.data.billingDetails.state,
-              city: verify.data.billingDetails.city,
-              country: verify.data.billingDetails.country,
-              first_name: response.Users_by_pk.first_name,
-              last_name: response.Users_by_pk.last_name,
-              user_id: uid,
-            },
-          });
-        } catch (e) {
-          functions.logger.log(new Error(`could not add billing address to user addresses, ${e.response} user: ${uid}`));
-        }
-
-        try {
-          /**
-           * Add card to vault if verified
-           */
-          const newCard = await axios(psAddCardOptions);
-          return newCard.data;
-        } catch (e) {
-          functions.logger.log(e, { status: e.response.status, data: e.response.data, userId: uid });
-          throw new functions.https.HttpsError(
-            "internal",
-            "Could not add card",
-            { ct_error_code: "could_not_add_card" }
-          );
-        }
-      } else {
-        const mismatch = verify.data.cvvVerification === "MATCH" ? "avs_mismatch" : "cvv_mismatch"
-        functions.logger.log(new Error(`${mismatch} user: ${uid}`));
-        throw new functions.https.HttpsError(
-          "failed-precondition",
-          "Could not add card",
-          { ct_error_code: mismatch }
-        );
-      }
-    } catch (e) {
-      functions.logger.log(e, { status: e.response.status, data: e.response.data, userId: uid });
+    /**
+     * Verify card token
+     */
+    const verify = await axios(psVerifyCardOptions);
+    const avs = verify.data.avsResponse;
+    const avsCvvError = (avs !== "MATCH" || avs !== "MATCH_ADDRESS_ONLY" || avs !== "MATCH_ZIP_ONLY") && verify.data.cvvVerification !== "MATCH";
+    if (avsCvvError) {
+      const mismatch = verify.data.cvvVerification === "MATCH" ? "avs_mismatch" : "cvv_mismatch";
+      functions.logger.log(new Error(`${mismatch} user: ${uid}`));
       throw new functions.https.HttpsError(
-        "internal",
-        "Could not verify card",
-        { ct_error_code: "could_not_verify_card" }
+        "failed-precondition",
+        "Failed avs/cvv verification",
+        { ct_error_code: mismatch }
       );
     }
-  } else {
-    functions.logger.log(new Error(`User Paysafe profile does not exist, user: ${uid}`));
+
+    GraphQLClient.request(ADD_BILLING_ADDRESS, {
+      address: {
+        line1: verify.data.billingDetails.street,
+        line2: verify.data.billingDetails.street2,
+        postal_zip_code: verify.data.billingDetails.zip,
+        state_province_region: verify.data.billingDetails.state,
+        city: verify.data.billingDetails.city,
+        country: verify.data.billingDetails.country,
+        first_name: response.Users_by_pk.first_name,
+        last_name: response.Users_by_pk.last_name,
+        user_id: uid,
+      },
+    });
+
+    const newCard = await axios(psAddCardOptions);
+    return newCard.data;
+  } catch (e) {
+    if(e.message === "Failed avs/cvv verification" || e.message === "User Paysafe profile does not exist") throw e
+    const verifyError = e.config && e.config.url.slice(e.config.url.length - 13, e.config.length) === "verifications";
+    functions.logger.log(e, { status: e.response && e.response.status, data: e.response && e.response.data, userId: uid });
     throw new functions.https.HttpsError(
       "failed-precondition",
-      "User Paysafe profile does not exist",
-      { ct_error_code: "user_paysafe_profile_does_not_exist" }
+      verifyError ? "Could not verify card" : "Could not add card",
+      { ct_error_code: verifyError ? "could_not_verify_card" : "could_not_add_card" }
     );
   }
 });

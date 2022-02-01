@@ -26,7 +26,14 @@ exports.removeCard = functions.https.onCall((data, context) => {
    */
   return GraphQLClient.request(GET_USER_PAYSAFE_ID, { userId: uid }).then(
     (response) => {
-      if (response.Users_by_pk.paysafe_user_id) {
+      if (!response.Users_by_pk.paysafe_user_id) {
+        functions.logger.log(new Error(`User Paysafe profile does not exist, user: ${uid}`));
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "User Paysafe profile does not exist",
+          { ct_error_code: "user_profile_missing" }
+        );
+      }
         /**
          * Remove card
          */
@@ -50,21 +57,14 @@ exports.removeCard = functions.https.onCall((data, context) => {
             return card.data;
           })
           .catch((e) => {
-            functions.logger.log(e, { status: e.response.status, data: e.response.data, userId: uid });
+            if(e.message === "User Paysafe profile does not exist") throw e
+            functions.logger.log(e, { status: e.response && e.response.status, data: e.response && e.response.data, userId: uid });
             throw new functions.https.HttpsError(
               "internal",
               "Could not remove card",
               { ct_error_code: "user_card_not_deleted" }
             );
           });
-      } else {
-        functions.logger.log(new Error(`User Paysafe profile does not exist, user: ${uid}`));
-        throw new functions.https.HttpsError(
-          "failed-precondition",
-          "User Paysafe profile does not exist",
-          { ct_error_code: "user_paysafe_profile_does_not_exist" }
-        );
-      }
     }
   );
 });

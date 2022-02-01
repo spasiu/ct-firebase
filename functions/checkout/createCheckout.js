@@ -19,7 +19,14 @@ exports.createCheckout = functions.https.onCall(async (data, context) => {
   const uid = context.auth.uid;
 
   const bcUser = await GraphQLClient.request(GET_USER_BC_ID, { userId: uid });
-  if (bcUser.Users_by_pk.bc_user_id) {
+  if (!bcUser.Users_by_pk.bc_user_id) {
+    functions.logger.log(new Error(`User BigCommerce profile does not exist, user: ${uid}`));
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "User doc does not exist.",
+      { ct_error_code: "could_not_complete_checkout" }
+    );
+  }
     const {
       products,
       first_name: firstName,
@@ -167,6 +174,7 @@ exports.createCheckout = functions.https.onCall(async (data, context) => {
         return bcCheckout.data;
       }
     } catch (e) {
+      if(e.message === "User doc does not exist.") throw e
       functions.logger.log({ error: e, userId: uid });
       const couponError = e.config && e.config.url && e.config.url.slice(e.config.url.length - 7, e.config.url.length) === "coupons";
       throw new functions.https.HttpsError(
@@ -175,14 +183,4 @@ exports.createCheckout = functions.https.onCall(async (data, context) => {
         { ct_error_code: couponError ? "invalid_coupon_code" : "could_not_complete_checkout" }
       );
     }
-  } else {
-    functions.logger.log(
-      new Error(`User BigCommerce profile does not exist, user: ${uid}`)
-    );
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "User doc does not exist.",
-      { ct_error_code: "could_not_complete_checkout" }
-    );
-  }
 });
