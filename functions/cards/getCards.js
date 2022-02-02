@@ -27,7 +27,7 @@ exports.getCards = functions.https.onCall((data, context) => {
       if (!response.Users_by_pk.paysafe_user_id) {
         functions.logger.log(new Error(`User Paysafe profile does not exist, user: ${uid}`));
         throw new functions.https.HttpsError(
-          "failed-precondition",
+          "internal",
           "User Paysafe profile does not exist",
           { ct_error_code: "user_profile_missing" }
         );

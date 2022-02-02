@@ -52,7 +52,7 @@ exports.addCard = functions.https.onCall(async (data, context) => {
   if (!response.Users_by_pk.paysafe_user_id) {
     functions.logger.log(new Error(`User Paysafe profile does not exist, user: ${uid}`));
     throw new functions.https.HttpsError(
-      "failed-precondition",
+      "internal",
       "User Paysafe profile does not exist",
       { ct_error_code: "user_profile_missing" }
     );
@@ -98,7 +98,7 @@ exports.addCard = functions.https.onCall(async (data, context) => {
      */
     const verify = await axios(psVerifyCardOptions);
     const avs = verify.data.avsResponse;
-    const avsCvvError = (avs !== "MATCH" || avs !== "MATCH_ADDRESS_ONLY" || avs !== "MATCH_ZIP_ONLY") && verify.data.cvvVerification !== "MATCH";
+    const avsCvvError = (avs === "NO_MATCH" || avs === "NOT_PROCESSED" || avs === "UNKNOWN") || verify.data.cvvVerification !== "MATCH";
     if (avsCvvError) {
       const mismatch = verify.data.cvvVerification === "MATCH" ? "avs_mismatch" : "cvv_mismatch";
       functions.logger.log(new Error(`${mismatch} user: ${uid}`));

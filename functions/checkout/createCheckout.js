@@ -22,9 +22,9 @@ exports.createCheckout = functions.https.onCall(async (data, context) => {
   if (!bcUser.Users_by_pk.bc_user_id) {
     functions.logger.log(new Error(`User BigCommerce profile does not exist, user: ${uid}`));
     throw new functions.https.HttpsError(
-      "failed-precondition",
-      "User doc does not exist.",
-      { ct_error_code: "could_not_complete_checkout" }
+      "internal",
+      "User Bigcommerce profile does not exist",
+      { ct_error_code: "user_profile_missing" }
     );
   }
     const {
@@ -175,7 +175,7 @@ exports.createCheckout = functions.https.onCall(async (data, context) => {
       }
     } catch (e) {
       if(e.message === "User doc does not exist.") throw e
-      functions.logger.log({ error: e, userId: uid });
+      functions.logger.log(e, { status: e.response && e.response.status, data: e.response && e.response.data, userId: uid });
       const couponError = e.config && e.config.url && e.config.url.slice(e.config.url.length - 7, e.config.url.length) === "coupons";
       throw new functions.https.HttpsError(
         "failed-precondition",
