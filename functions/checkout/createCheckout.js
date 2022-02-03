@@ -12,7 +12,20 @@ const GET_USER_BC_ID = gql`
     }
   }
 `;
-
+const ERRORS = {
+  user_profile_missing: {
+    type: "user_profile_missing",
+    httpsArgs: ["internal", "User Bigcommerce profile does not exist", { ct_error_code: "user_profile_missing" }]
+  },
+  invalid_coupon_code: {
+    type: "invalid_coupon_code",
+    httpsArgs: ["failed-precondition", "Invalid coupon code.", { ct_error_code: "invalid_coupon_code" }]
+  },
+  could_not_complete_checkout: {
+    type: "could_not_complete_checkout",
+    httpsArgs: ["failed-precondition", "Could not complete checkout.", { ct_error_code: "could_not_complete_checkout" }]
+  }
+}
 exports.createCheckout = functions.https.onCall(async (data, context) => {
   authorize(context);
 
@@ -20,12 +33,7 @@ exports.createCheckout = functions.https.onCall(async (data, context) => {
 
   const bcUser = await GraphQLClient.request(GET_USER_BC_ID, { userId: uid });
   if (!bcUser.Users_by_pk.bc_user_id) {
-    functions.logger.log(new Error(`User BigCommerce profile does not exist, user: ${uid}`));
-    throw new functions.https.HttpsError(
-      "internal",
-      "User Bigcommerce profile does not exist",
-      { ct_error_code: "user_profile_missing" }
-    );
+    throw new Error(ERRORS.user_profile_missing.type)
   }
     const {
       products,
@@ -169,18 +177,12 @@ exports.createCheckout = functions.https.onCall(async (data, context) => {
             "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
           },
         };
-
         const bcCheckout = await axios(bcGetCheckoutOptions);
         return bcCheckout.data;
       }
     } catch (e) {
-      if(e.message === "User doc does not exist.") throw e
+      const error = ERRORS[e.message] || (e.config && e.config.url.indexOf("coupons") > -1 ? ERRORS.invalid_coupon_code : ERRORS.could_not_complete_checkout);
       functions.logger.log(e, { status: e.response && e.response.status, data: e.response && e.response.data, userId: uid });
-      const couponError = e.config && e.config.url && e.config.url.slice(e.config.url.length - 7, e.config.url.length) === "coupons";
-      throw new functions.https.HttpsError(
-        "failed-precondition",
-        couponError ? "invalid coupon code." : "could not complete checkout.",
-        { ct_error_code: couponError ? "invalid_coupon_code" : "could_not_complete_checkout" }
-      );
+      throw new functions.https.HttpsError(...error.httpsArgs);
     }
 });
