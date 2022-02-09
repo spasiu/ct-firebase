@@ -16,11 +16,19 @@ const GET_USER_PAYSAFE_ID = gql`
 const ERRORS = {
   user_profile_missing: {
     type: "user_profile_missing",
-    httpsArgs: ["internal", "User Paysafe profile does not exist", { ct_error_code: "user_profile_missing" }]
+    httpsArgs: [
+      "internal",
+      "User Paysafe profile does not exist",
+      { ct_error_code: "user_profile_missing" },
+    ],
   },
   user_cards_not_retreived: {
     type: "user_cards_not_retreived",
-    httpsArgs: ["internal", "Could not fetch cards", { ct_error_code: "user_cards_not_retreived" }],
+    httpsArgs: [
+      "internal",
+      "Could not fetch cards",
+      { ct_error_code: "user_cards_not_retreived" },
+    ],
   },
 };
 exports.getCards = functions.https.onCall(async (data, context) => {
@@ -31,10 +39,10 @@ exports.getCards = functions.https.onCall(async (data, context) => {
     /**
      * Get user doc
      */
-    const response = await GraphQLClient.request(GET_USER_PAYSAFE_ID, { userId: uid });
-    if (!response.Users_by_pk.paysafe_user_id) {
-      throw new Error(ERRORS.user_profile_missing.type)
-    }
+    const response = await GraphQLClient.request(GET_USER_PAYSAFE_ID, {
+      userId: uid,
+    });
+    if (!response.Users_by_pk.paysafe_user_id) throw new Error(ERRORS.user_profile_missing.type)
     /**
      * Get cards
      */
@@ -52,7 +60,11 @@ exports.getCards = functions.https.onCall(async (data, context) => {
     return cards.data;
   } catch (e) {
     const error = ERRORS[e.message] || ERRORS.user_cards_not_retreived;
-    functions.logger.log(e, { status: e.response && e.response.status, data: e.response && e.response.data, userId: uid});
+    functions.logger.log(e, {
+      status: e.response && e.response.status,
+      data: e.response && e.response.data,
+      userId: uid,
+    });
     throw new functions.https.HttpsError(...error.httpsArgs);
   }
 });

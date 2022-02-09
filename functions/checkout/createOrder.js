@@ -119,7 +119,6 @@ const ERRORS = {
       "Could not get items from Cards & Treasure database.",
       { ct_error_code: "could_not_complete_order" },
     ],
-    voidAuth: false,
   },
   could_not_get_bc_checkout: {
     type: "could_not_get_bc_checkout",
@@ -128,7 +127,6 @@ const ERRORS = {
       "Could not get checkout from BigCommerce.",
       { ct_error_code: "could_not_complete_order" },
     ],
-    voidAuth: false,
   },
   purchase_no_longer_available: {
     type: "purchase_no_longer_available",
@@ -137,7 +135,6 @@ const ERRORS = {
       "Spot(s) no longer available.",
       { ct_error_code: "purchase_no_longer_available" },
     ],
-    voidAuth: false,
   },
   bc_hasura_item_mismatch: {
     type: "bc_hasura_item_mismatch",
@@ -146,7 +143,6 @@ const ERRORS = {
       "Checkout items do not match available break items",
       { ct_error_code: "could_not_complete_order" },
     ],
-    voidAuth: false,
   },
   could_not_complete_order: {
     type: "could_not_complete_order",
@@ -155,7 +151,6 @@ const ERRORS = {
       "Could not complete order.",
       { ct_error_code: "could_not_complete_order" },
     ],
-    voidAuth: false,
   },
   could_not_complete_paysafe_payment: {
     type: "could_not_complete_paysafe_payment",
@@ -164,7 +159,6 @@ const ERRORS = {
       "Could not complete PaySafe payment.",
       { ct_error_code: "could_not_complete_paysafe_payment" },
     ],
-    voidAuth: true,
   },
   could_not_complete_paysafe_auth: {
     type: "could_not_complete_paysafe_auth",
@@ -173,7 +167,6 @@ const ERRORS = {
       "Payment declined, insufficient funds.",
       { ct_error_code: "could_not_complete_paysafe_auth" },
     ],
-    voidAuth: false,
   },
   could_not_update_bc_payment: {
     type: "could_not_update_bc_payment",
@@ -182,7 +175,6 @@ const ERRORS = {
       "Could not update BigCommerce payment method and status.",
       { ct_error_code: "could_not_complete_order" },
     ],
-    voidAuth: true,
   },
   could_not_create_bc_order: {
     type: "could_not_create_bc_order",
@@ -191,7 +183,6 @@ const ERRORS = {
       "Could not create BigCommerce order.",
       { ct_error_code: "could_not_complete_order" },
     ],
-    voidAuth: true,
   },
   could_not_create_hasura_order: {
     type: "could_not_create_hasura_order",
@@ -200,7 +191,6 @@ const ERRORS = {
       "Could not create order in our database.",
       { ct_error_code: "could_not_complete_order" },
     ],
-    voidAuth: true,
   },
 };
 
@@ -242,9 +232,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   const { cartId, paymentToken } = data;
   const uid = context.auth.uid;
   const orderId = uuidv4();
-  let paymentData;
-  let errorLog;
-  let ctProductItemsRequest;
+  let paymentData, errorLog, ctProductItemsRequest;
 
   try {
     /**
@@ -368,8 +356,6 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
       };
       const auth = await axios(psAuthPaymentOptions);
       paymentData = auth.data;
-
-      //check if card failed due to insufficient funds and throw appropriate error
     }
     /**
      * Create BC order
@@ -525,7 +511,8 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
       paymentError ||
       ERRORS.could_not_complete_order;
     const log = errorLog || e;
-    if (ctProductItemsRequest && ctProductItemsRequest.BreakProductItems) rollback(ctProductItemsRequest, uid, paymentData);
+    if (ctProductItemsRequest && ctProductItemsRequest.BreakProductItems)
+      rollback(ctProductItemsRequest, uid, paymentData);
     functions.logger.log(log, {
       status: log.response && log.response.status,
       data: log.response && log.response.data,

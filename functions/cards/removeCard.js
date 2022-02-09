@@ -44,9 +44,7 @@ exports.removeCard = functions.https.onCall(async (data, context) => {
     const response = await GraphQLClient.request(GET_USER_PAYSAFE_ID, {
       userId: uid,
     });
-    if (!response.Users_by_pk.paysafe_user_id) {
-      throw new Error(ERRORS.user_profile_missing.type);
-    }
+    if (!response.Users_by_pk.paysafe_user_id) throw new Error(ERRORS.user_profile_missing.type)
     /**
      * Remove card
      */
