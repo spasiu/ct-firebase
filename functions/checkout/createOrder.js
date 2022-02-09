@@ -33,26 +33,23 @@ const INSERT_ORDER_IN_PROCESS = gql`
 
 const CHECK_FOR_ORDER_IN_PROCESS = gql`
   query CheckForFailedOrder($productIds: [uuid!]!) {
-    order_in_process(
-      where: {product_id: {_in: $productIds}}
-    ){
+    order_in_process(where: { product_id: { _in: $productIds } }) {
       product_id
     }
   }
-`
+`;
 
 const UNDO_ITEM_RESERVATION = gql`
-  mutation UndoBreakProductItemReservation( $itemIds: [uuid!]!) {
+  mutation UndoBreakProductItemReservation($itemIds: [uuid!]!) {
     update_BreakProductItems(
-      where: { _and: [{id: {_in: $itemIds}}, {order_id: {_is_null: true}}] }
+      where: {
+        _and: [{ id: { _in: $itemIds } }, { order_id: { _is_null: true } }]
+      }
       _set: { quantity: 1 }
-     ) {
+    ) {
       affected_rows
     }
-  
-    delete_order_in_process(
-      where: { product_id: {_in: $itemIds} }
-    ){
+    delete_order_in_process(where: { product_id: { _in: $itemIds } }) {
       affected_rows
     }
   }
@@ -73,13 +70,9 @@ const INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS = gql`
       tax_total
       shipping_total
     }
-
     update_BreakProductItems(
       where: { _or: $breakLineItems }
-      _set: {
-        order_id: $orderId,
-        quantity: 0
-      }
+      _set: { order_id: $orderId, quantity: 0 }
     ) {
       returning {
         id
@@ -90,7 +83,7 @@ const INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS = gql`
 
 const SAVE_PURCHASED_BREAKS_AND_EVENTS = gql`
   mutation SavePurchasedBreaks(
-    $breakObjects: [SaveBreak_insert_input!]!,
+    $breakObjects: [SaveBreak_insert_input!]!
     $eventObjects: [SaveEvent_insert_input!]!
   ) {
     insert_SaveBreak(objects: $breakObjects) {
@@ -110,16 +103,137 @@ const SAVE_PURCHASED_BREAKS_AND_EVENTS = gql`
 
 const CLEAR_ORDERS_IN_PROCESS = gql`
   mutation clearProcessing {
-      delete_order_in_process(where: {BreakProductItems: {order_id: {_is_null: false}}}){
-        affected_rows
-      }
+    delete_order_in_process(
+      where: { BreakProductItems: { order_id: { _is_null: false } } }
+    ) {
+      affected_rows
     }
+  }
 `;
 
-const rollbackPurchase = (ctProductItemsRequest) => {
-  return GraphQLClient.request(UNDO_ITEM_RESERVATION, {
-    itemIds: ctProductItemsRequest.BreakProductItems.map(item => item.id)
-  });
+const ERRORS = {
+  could_not_get_ct_items: {
+    type: "could_not_get_ct_items",
+    httpsArgs: [
+      "failed-precondition",
+      "Could not get items from Cards & Treasure database.",
+      { ct_error_code: "could_not_complete_order" },
+    ],
+    voidAuth: false,
+  },
+  could_not_get_bc_checkout: {
+    type: "could_not_get_bc_checkout",
+    httpsArgs: [
+      "failed-precondition",
+      "Could not get checkout from BigCommerce.",
+      { ct_error_code: "could_not_complete_order" },
+    ],
+    voidAuth: false,
+  },
+  purchase_no_longer_available: {
+    type: "purchase_no_longer_available",
+    httpsArgs: [
+      "failed-precondition",
+      "Spot(s) no longer available.",
+      { ct_error_code: "purchase_no_longer_available" },
+    ],
+    voidAuth: false,
+  },
+  bc_hasura_item_mismatch: {
+    type: "bc_hasura_item_mismatch",
+    httpsArgs: [
+      "Internal",
+      "Checkout items do not match available break items",
+      { ct_error_code: "could_not_complete_order" },
+    ],
+    voidAuth: false,
+  },
+  could_not_complete_order: {
+    type: "could_not_complete_order",
+    httpsArgs: [
+      "failed-precondition",
+      "Could not complete order.",
+      { ct_error_code: "could_not_complete_order" },
+    ],
+    voidAuth: false,
+  },
+  could_not_complete_paysafe_payment: {
+    type: "could_not_complete_paysafe_payment",
+    httpsArgs: [
+      "failed-precondition",
+      "Could not complete PaySafe payment.",
+      { ct_error_code: "could_not_complete_paysafe_payment" },
+    ],
+    voidAuth: true,
+  },
+  could_not_complete_paysafe_auth: {
+    type: "could_not_complete_paysafe_auth",
+    httpsArgs: [
+      "failed-precondition",
+      "Payment declined, insufficient funds.",
+      { ct_error_code: "could_not_complete_paysafe_auth" },
+    ],
+    voidAuth: false,
+  },
+  could_not_update_bc_payment: {
+    type: "could_not_update_bc_payment",
+    httpsArgs: [
+      "failed-precondition",
+      "Could not update BigCommerce payment method and status.",
+      { ct_error_code: "could_not_complete_order" },
+    ],
+    voidAuth: true,
+  },
+  could_not_create_bc_order: {
+    type: "could_not_create_bc_order",
+    httpsArgs: [
+      "failed-precondition",
+      "Could not create BigCommerce order.",
+      { ct_error_code: "could_not_complete_order" },
+    ],
+    voidAuth: true,
+  },
+  could_not_create_hasura_order: {
+    type: "could_not_create_hasura_order",
+    httpsArgs: [
+      "failed-precondition",
+      "Could not create order in our database.",
+      { ct_error_code: "could_not_complete_order" },
+    ],
+    voidAuth: true,
+  },
+};
+
+const rollback = async (ctProductItemsRequest, userId, payment) => {
+  try {
+    if (payment) {
+      const psVoidAuthOptions = {
+        url: `${functions.config().env.paysafe.url}/cardpayments/v1/accounts/${
+          functions.config().env.paysafe.accountId
+        }/auths/${payment.id}/voidauths`,
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${functions.config().env.paysafe.serverToken}`,
+          "Content-Type": "application/json",
+        },
+        data: {
+          merchantRefNum: uuidv4(),
+          amount: payment.amount,
+        },
+      };
+      axios(psVoidAuthOptions);
+    }
+    GraphQLClient.request(UNDO_ITEM_RESERVATION, {
+      itemIds: ctProductItemsRequest.BreakProductItems.map((item) => item.id),
+    });
+  } catch (e) {
+    functions.logger.log(e, "ROLLBACK FAILED", {
+      status: e.response && e.response.status,
+      data: e.response && e.response.data,
+      userId: userId,
+      payment: payment,
+    });
+  }
 };
 
 exports.createOrder = functions.https.onCall(async (data, context) => {
@@ -128,335 +242,295 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
   const { cartId, paymentToken } = data;
   const uid = context.auth.uid;
   const orderId = uuidv4();
-
-  let bcCheckoutRequest, bcCreateOrderRequest, ctProductItemsRequest, bcOrderId;
-
-  /**
-   * Get User's cart
-   */
-  const bcGetCheckoutOptions = {
-    url: `${functions.config().env.bigCommerce.url}/checkouts/${cartId}`,
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-Auth-Client": functions.config().env.bigCommerce.clientId,
-      "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
-    },
-  };
+  let paymentData;
+  let errorLog;
+  let ctProductItemsRequest;
 
   try {
-    bcCheckoutRequest = await axios(bcGetCheckoutOptions);
-  } catch (e) {
-    functions.logger.log(e.response);
+    /**
+     * Get User's cart
+     */
+    const bcGetCheckoutOptions = {
+      url: `${functions.config().env.bigCommerce.url}/checkouts/${cartId}`,
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+        "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
+      },
+    };
+    const bcCheckoutRequest = await axios(bcGetCheckoutOptions);
+    const bcCartData = bcCheckoutRequest.data.data;
+    const bcCartItems = bcCartData.cart.line_items.physical_items;
 
-    throw new functions.https.HttpsError(
-      "internal",
-      "Could not get checkout from BigCommerce"
-    );
-  }
+    // Generate query input to get BreakProductItems in our database
+    const breakQueryProductInput = bcCartItems.map((item) => ({
+      bc_product_id: { _eq: item.product_id },
+      bc_variant_id: { _eq: item.variant_id },
+    }));
 
-  const bcCartData = bcCheckoutRequest.data.data;
-  const bcCartItems = bcCartData.cart.line_items.physical_items;
-
-  // Generate query input to get BreakProductItems in our database
-  const breakQueryProductInput = bcCartItems.map((item) => ({
-    bc_product_id: { _eq: item.product_id },
-    bc_variant_id: { _eq: item.variant_id },
-  }));
-
-  /**
-   * Get break product line items from our database
-   */
-  try {
+    /**
+     * Get break product line items from our database
+     */
     ctProductItemsRequest = await GraphQLClient.request(
       GET_BREAK_PRODUCT_ITEMS_FOR_ORDER,
       {
         lineItems: breakQueryProductInput,
       }
-    );
-  } catch (e) {
-    functions.logger.log(e);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Could not get items from Cards & Treasure database"
-    );
-  }
+    ).catch((e) => {
+      errorLog = e;
+      throw new Error(ERRORS.could_not_get_ct_items.type);
+    });
 
-  /**
-   * make sure break is in a sellable state
-   * and that item has not already been purchased
-   */
-   const nUnsellableStatuses =
-   ctProductItemsRequest.BreakProductItems
-     .map((productItem) => productItem.Break.status)
-     .filter(
-       (breakStatus) =>
-         breakStatus === "COMPLETED" ||
-         breakStatus === "LIVE" ||
-         breakStatus === "SOLDOUT"
-     ).length;
-
-  if (nUnsellableStatuses > 0) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      nUnsellableStatuses > 1
-        ? "Spots are no longer available."
-        : "Spot is no longer available.",
-      { ct_error_code: "purchase_no_longer_available" }
-    );
-  }
-
-  /**
-   * check if any selected items have already been purchased 
-   */
-  const alreadySold = ctProductItemsRequest.BreakProductItems
-    .filter(item => item.order_id !== null);
-
-  if (alreadySold.length > 0 ) {
-    rollbackPurchase(ctProductItemsRequest);
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "Spot is no longer available.",
-      { ct_error_code: "purchase_no_longer_available" }
-    );
-  }
-
-  /**
-   * prevent duplicate purchases by registering first purchase
-   * to orders_in_process db table
-   */
-  try {
-    await GraphQLClient.request(INSERT_ORDER_IN_PROCESS, 
-      {
-        objects: ctProductItemsRequest.BreakProductItems.map(item => ({product_id: item.id}))
-      }
-    );
-  } catch (error) {
     /**
-     * query for failed item(s) and rollback others
-     * to prevent them from being erroneously reserved
+     * make sure break is in a sellable state
+     * and that item has not already been purchased
      */
-    const failed = await GraphQLClient.request(
-      CHECK_FOR_ORDER_IN_PROCESS,
-      {
-        productIds: ctProductItemsRequest.BreakProductItems.map(item => item.id)
-      }
+    const nUnsellableStatuses = ctProductItemsRequest.BreakProductItems.map(
+      (productItem) => productItem.Break.status
+    ).filter(
+      (breakStatus) =>
+        breakStatus === "COMPLETED" ||
+        breakStatus === "LIVE" ||
+        breakStatus === "SOLDOUT"
+    ).length;
+    const alreadySold = ctProductItemsRequest.BreakProductItems.filter(
+      (item) => item.order_id !== null
     );
+    if (nUnsellableStatuses > 0 || alreadySold.length > 0)
+      throw new Error(ERRORS.purchase_no_longer_available.type);
+    /**
+     * prevent duplicate purchases by registering first purchase
+     * to orders_in_process db table
+     */
+    await GraphQLClient.request(INSERT_ORDER_IN_PROCESS, {
+      objects: ctProductItemsRequest.BreakProductItems.map((item) => ({
+        product_id: item.id,
+      })),
+    }).catch(async (e) => {
+      errorLog = e;
+      /**
+       * query for failed item(s) and rollback others
+       * to prevent them from being erroneously reserved
+       */
+      const failed = await GraphQLClient.request(CHECK_FOR_ORDER_IN_PROCESS, {
+        productIds: ctProductItemsRequest.BreakProductItems.map(
+          (item) => item.id
+        ),
+      });
+      // remove failed items from the rollback list
+      const failedItemIds = failed.order_in_process.map(
+        (item) => item.product_id
+      );
+      const failedItems = ctProductItemsRequest.BreakProductItems.filter(
+        (item) => !failedItemIds.includes(item.id)
+      );
+      ctProductItemsRequest.BreakProductItems = failedItems;
+      throw new Error(ERRORS.purchase_no_longer_available.type);
+    });
 
-    // remove failed items from the rollback list
-    const failedItemIds = failed.order_in_process.map(item => item.product_id);
-    const failedItems = ctProductItemsRequest.BreakProductItems.filter(item => !failedItemIds.includes(item.id));
-    ctProductItemsRequest.BreakProductItems = failedItems;
+    // Ensure number of break product items available in our databae matches length of BC line items
+    if (
+      ctProductItemsRequest.BreakProductItems.length !==
+      breakQueryProductInput.length
+    ) {
+      throw new functions.https.HttpsError(ERRORS.bc_hasura_item_mismatch.type);
+    }
+    /**
+     * Auth payment
+     */
+    if (bcCartData.grand_total > 0) {
+      const psAuthPaymentOptions = {
+        url: `${functions.config().env.paysafe.url}/cardpayments/v1/accounts/${
+          functions.config().env.paysafe.accountId
+        }/auths`,
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${functions.config().env.paysafe.serverToken}`,
+          "Content-Type": "application/json",
+        },
+        data: {
+          card: {
+            paymentToken: paymentToken,
+          },
+          merchantRefNum: orderId,
+          amount: bcCartData.grand_total.toFixed(2).replace(".", ""),
+          settleWithAuth: false,
+          storedCredential: {
+            type: "RECURRING",
+            occurrence: "SUBSEQUENT",
+          },
+          merchantDescriptor: {
+            dynamicDescriptor: "Cards&Treasure",
+          },
+        },
+      };
+      const auth = await axios(psAuthPaymentOptions);
+      paymentData = auth.data;
 
-    rollbackPurchase(ctProductItemsRequest);
-
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      `${failedItems} no longer available.`,
-      { ct_error_code: "purchase_no_longer_available" }
-    );
-  }
-
-  // Ensure number of break product items available in our databae matches length of BC line items
-  if (ctProductItemsRequest.BreakProductItems.length !== breakQueryProductInput.length) {
-    // if not, undo previous reservation
-    await rollbackPurchase(ctProductItemsRequest);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Checkout items do not match available break items"
-    );
-  }
-
-  /**
-   * Process payment
-   */
-  if (bcCartData.grand_total > 0) {
-    const psMakePaymentOptions = {
-      url: `${functions.config().env.paysafe.url}/cardpayments/v1/accounts/${
-        functions.config().env.paysafe.accountId
-      }/auths`,
+      //check if card failed due to insufficient funds and throw appropriate error
+    }
+    /**
+     * Create BC order
+     */
+    const bcCreateOrderOptions = {
+      url: `${
+        functions.config().env.bigCommerce.url
+      }/checkouts/${cartId}/orders`,
       method: "POST",
       headers: {
-        Authorization: `Basic ${functions.config().env.paysafe.serverToken}`,
+        Accept: "application/json",
         "Content-Type": "application/json",
-      },
-      data: {
-        card: {
-          paymentToken: paymentToken,
-        },
-        merchantRefNum: orderId,
-        amount: bcCartData.grand_total.toFixed(2).replace(".", ""),
-        settleWithAuth: true,
-        storedCredential: {
-          type: "RECURRING",
-          occurrence: "SUBSEQUENT",
-        },
-        merchantDescriptor: {
-          dynamicDescriptor: "Cards&Treasure",
-        },
+        "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+        "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
       },
     };
 
-    try {
-      await axios(psMakePaymentOptions);
-    } catch (e) {
-      functions.logger.log(e.response);
+    const bcCreateOrderRequest = await axios(bcCreateOrderOptions);
+    const bcOrderId = bcCreateOrderRequest.data.data.id;
 
-      // if payment failed, undo reservation
-      await rollbackPurchase(ctProductItemsRequest);
+    /**
+     * Update BC order and set payment to external, and status to pending
+     */
+    const bcUpdateOrderToPendingOptions = {
+      url: `${functions.config().env.bigCommerce.urlV2}/orders/${bcOrderId}`,
+      method: "PUT",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+        "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
+      },
+      data: {
+        payment_method: "Cards & Treasure App",
+        status_id: 11,
+      },
+    };
 
-      throw new functions.https.HttpsError(
-        "internal",
-        "Could not complete PaySafe payment"
-      );
-    }
-  }
-  /**
-   * Create BC order
-   */
-  const bcCreateOrderOptions = {
-    url: `${functions.config().env.bigCommerce.url}/checkouts/${cartId}/orders`,
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-Auth-Client": functions.config().env.bigCommerce.clientId,
-      "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
-    },
-  };
-
-  try {
-    bcCreateOrderRequest = await axios(bcCreateOrderOptions);
-    bcOrderId = bcCreateOrderRequest.data.data.id;
-  } catch (e) {
-    functions.logger.log(e.response);
-
-    // if bc order failed, undo reservation
-    await rollbackPurchase(ctProductItemsRequest);
-
-    throw new functions.https.HttpsError(
-      "internal",
-      "Could not create BigCommerce order"
-    );
-  }
-
-  /**
-   * Update BC order and set payment to external, and status to pending
-   */
-  const bcUpdateOrderToPendingOptions = {
-    url: `${functions.config().env.bigCommerce.urlV2}/orders/${bcOrderId}`,
-    method: "PUT",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-Auth-Client": functions.config().env.bigCommerce.clientId,
-      "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
-    },
-    data: {
-      payment_method: "Cards & Treasure App",
-      status_id: 11,
-    },
-  };
-
-  try {
     await axios(bcUpdateOrderToPendingOptions);
-  } catch (e) {
-    functions.logger.log(e.response);
 
-    // if bc order failed, undo reservation
-    await rollbackPurchase(ctProductItemsRequest);
+    /**
+     * Create Hasura Order
+     */
+    await GraphQLClient.request(INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS, {
+      orderId: orderId,
+      breakLineItems: breakQueryProductInput,
+      orderObject: {
+        id: orderId,
+        user_id: uid,
+        bc_order_id: bcOrderId,
+        subtotal: bcCartData.subtotal_ex_tax,
+        discount_total: 0,
+        tax_total: bcCartData.tax_total,
+        grand_total: bcCartData.grand_total,
+        shipping_total: bcCartData.shipping_cost_total_ex_tax,
+      },
+    }).catch((e) => {
+      errorLog = e;
+      throw new Error(ERRORS.could_not_create_hasura_order.type);
+    });
 
-    throw new functions.https.HttpsError(
-      "internal",
-      "Could not update BigCommerce payment method and status"
-    );
-  }
-
-  /**
-   * Create Hasura Order
-   */
-  try {
-    await GraphQLClient.request(
-      INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS,
-      {
-        orderId: orderId,
-        breakLineItems: breakQueryProductInput,
-        orderObject: {
-          id: orderId,
-          user_id: uid,
-          bc_order_id: bcOrderId,
-          subtotal: bcCartData.subtotal_ex_tax,
-          discount_total: 0,
-          tax_total: bcCartData.tax_total,
-          grand_total: bcCartData.grand_total,
-          shipping_total: bcCartData.shipping_cost_total_ex_tax,
+    /**
+     * Process payment
+     */
+    if (paymentData) {
+      const psMakePaymentOptions = {
+        url: `${functions.config().env.paysafe.url}/cardpayments/v1/accounts/${
+          functions.config().env.paysafe.accountId
+        }/auths/${paymentData.id}/settlements`,
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${functions.config().env.paysafe.serverToken}`,
+          "Content-Type": "application/json",
         },
-      }
-    );
-  } catch (e) {
-    functions.logger.log(e);
+        data: {
+          merchantRefNum: orderId,
+        },
+      };
+      const payment = await axios(psMakePaymentOptions);
+      paymentData = payment.data;
+    }
 
-    // if db update failed, undo reservation (TODO: is this right, even if payment went through?)
-    await rollbackPurchase(ctProductItemsRequest);
-
-    throw new functions.https.HttpsError(
-      "internal",
-      "Could not create order in our database"
-    );
-  }
-
-  /**
-   * Follow purchased breaks and events
-   */
-  try {
-    const breakObjects = ctProductItemsRequest.BreakProductItems
-      .map(item => (item.break_id))
+    /**
+     * Follow purchased breaks and events
+     */
+    const breakObjects = ctProductItemsRequest.BreakProductItems.map(
+      (item) => item.break_id
+    )
       // remove dupes
-      .filter(
-        (breakId, index, breakIds) => breakIds.indexOf(breakId) === index
-      )
-      .map((breakId) => {
-        return {
-          break_id: breakId,
-          user_id: uid,
-        };
-      });
+      .filter((breakId, index, breakIds) => breakIds.indexOf(breakId) === index)
+      .map((breakId) => ({ break_id: breakId, user_id: uid }));
 
-    const eventObjects = ctProductItemsRequest.BreakProductItems
-      .map(item => (item.Break.event_id))
+    const eventObjects = ctProductItemsRequest.BreakProductItems.map(
+      (item) => item.Break.event_id
+    )
       // remove dupes
-      .filter(
-        (eventId, index, eventIds) => eventIds.indexOf(eventId) === index
-      )
-      .map((eventId) => {
-        return {
-          event_id: eventId,
-          user_id: uid,
-        };
-      });  
+      .filter((eventId, index, eventIds) => eventIds.indexOf(eventId) === index)
+      .map((eventId) => ({ event_id: eventId, user_id: uid }));
 
     GraphQLClient.request(SAVE_PURCHASED_BREAKS_AND_EVENTS, {
       breakObjects: breakObjects,
-      eventObjects: eventObjects
+      eventObjects: eventObjects,
+    }).catch((e) => functions.logger.log(e));
+    /**
+     * clear completed orders out of orders_in_process
+     *  -- no need to wait for this, as it is semi-passive
+     * cleanup and will be redone on the next pass, if
+     * needs be
+     */
+    GraphQLClient.request(CLEAR_ORDERS_IN_PROCESS).catch((e) =>
+      functions.logger.log(e, {
+        status: e.response && e.response.status,
+        data: e.response && e.response.data,
+        userId: uid,
+      })
+    );
+
+    return { message: "Order created" };
+  } catch (e) {
+    const checkoutError =
+      e.config &&
+      e.config.url.indexOf("checkouts") > -1 &&
+      e.config.url.indexOf("orders") < 0 &&
+      ERRORS.could_not_get_bc_checkout;
+    const orderError =
+      e.config &&
+      e.config.url.indexOf("orders") > -1 &&
+      e.config.url.indexOf("checkouts") > -1 &&
+      ERRORS.could_not_create_bc_order;
+    const pendingOrderError =
+      e.config &&
+      e.config.url.indexOf("orders") > -1 &&
+      e.config.url.indexOf("checkouts") < 0 &&
+      ERRORS.could_not_update_bc_payment;
+    const paymentAuthError =
+      e.config &&
+      e.config.url.indexOf("cardpayments") > -1 &&
+      e.config.url.indexOf("settlements") < 0 &&
+      e.response.data.error.code === "3022"
+        ? ERRORS.could_not_complete_paysafe_auth
+        : ERRORS.could_not_complete_paysafe_payment;
+    const paymentError =
+      e.config &&
+      e.config.url.indexOf("cardpayments") > -1 &&
+      e.config.url.indexOf("settlements") > -1 &&
+      ERRORS.could_not_complete_paysafe_payment;
+    const error =
+      ERRORS[e.message] ||
+      checkoutError ||
+      orderError ||
+      pendingOrderError ||
+      paymentAuthError ||
+      paymentError ||
+      ERRORS.could_not_complete_order;
+    const log = errorLog || e;
+    if (ctProductItemsRequest && ctProductItemsRequest.BreakProductItems) rollback(ctProductItemsRequest, uid, paymentData);
+    functions.logger.log(log, {
+      status: log.response && log.response.status,
+      data: log.response && log.response.data,
+      userId: uid,
     });
-  } catch (e) {
-    functions.logger.log(e);
+    throw new functions.https.HttpsError(...error.httpsArgs);
   }
-
-  /**
-   * clear completed orders out of orders_in_process
-   *  -- no need to wait for this, as it is semi-passive
-   * cleanup and will be redone on the next pass, if
-   * needs be
-   */
-  try {
-    GraphQLClient.request(CLEAR_ORDERS_IN_PROCESS);
-  } catch (e) {
-    functions.logger.log(e);
-  }
-
-  return {
-    message: "Order created",
-  };
 });
