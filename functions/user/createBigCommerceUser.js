@@ -45,7 +45,11 @@ exports.createBigCommerceUser = functions.https.onCall(
 
       const bcUserRequest = await axios(bcCreateUseOptions);
 
-      await admin.firestore().collection("Users").doc(uid).set({ bcUserId: bcUserRequest.data.id }, { merge: true });
+      await admin
+        .firestore()
+        .collection("Users")
+        .doc(uid)
+        .set({ bcUserId: bcUserRequest.data.id }, { merge: true });
 
       await GraphQLClient.request(UPDATE_BC_ID, {
         userId: uid,

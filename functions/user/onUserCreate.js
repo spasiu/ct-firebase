@@ -31,7 +31,6 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
   const uid = user.uid;
   const email = user.email;
   try {
-
     /**
      * Create Paysafe profile for user
      */
@@ -118,10 +117,8 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
       data: e.response && e.response.data,
       userId: uid,
     });
-    throw new functions.https.HttpsError(
-      "internal",
-      "Could not create user",
-      { ct_error_code: "could_not_create_user" }
-    );
+    throw new functions.https.HttpsError("internal", "Could not create user", {
+      ct_error_code: "could_not_create_user",
+    });
   }
 });
