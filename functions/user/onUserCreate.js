@@ -30,55 +30,44 @@ const INSERT_HASURA_USER = gql`
 exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
   const uid = user.uid;
   const email = user.email;
-
-  let profileRequest;
-
-  /**
-   * Create Paysafe profile for user
-   */
-  const psCreateProfileOptions = {
-    url: `${functions.config().env.paysafe.url}/customervault/v1/profiles`,
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Basic ${functions.config().env.paysafe.serverToken}`,
-    },
-    data: { merchantCustomerId: `${uid}-${Date.now()}`, locale: "en_US" },
-  };
-
   try {
-    profileRequest = await axios(psCreateProfileOptions);
-  } catch (e) {
-    functions.logger.log(e.response.data);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Could not create paysafe profile",
-      e.response.data
+
+    /**
+     * Create Paysafe profile for user
+     */
+    const psCreateProfileOptions = {
+      url: `${functions.config().env.paysafe.url}/customervault/v1/profiles`,
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Basic ${functions.config().env.paysafe.serverToken}`,
+      },
+      data: { merchantCustomerId: `${uid}-${Date.now()}`, locale: "en_US" },
+    };
+
+    const profileRequest = await axios(psCreateProfileOptions);
+
+    /**
+     * Create user verification for Intercom
+     */
+    const hmacIOS = crypto.createHmac(
+      "sha256",
+      functions.config().env.intercom.IOSSecret
     );
-  }
+    hmacIOS.update(uid);
+    const hmacIOSHash = hmacIOS.digest("hex");
 
-  /**
-   * Create user verification for Intercom
-   */
-  const hmacIOS = crypto.createHmac(
-    "sha256",
-    functions.config().env.intercom.IOSSecret
-  );
-  hmacIOS.update(uid);
-  const hmacIOSHash = hmacIOS.digest("hex");
+    const hmacAndroid = crypto.createHmac(
+      "sha256",
+      functions.config().env.intercom.AndroidSecret
+    );
+    hmacAndroid.update(uid);
+    const hmacAndroidHash = hmacAndroid.digest("hex");
 
-  const hmacAndroid = crypto.createHmac(
-    "sha256",
-    functions.config().env.intercom.AndroidSecret
-  );
-  hmacAndroid.update(uid);
-  const hmacAndroidHash = hmacAndroid.digest("hex");
-
-  /**
-   * Add Paysafe profile and Intercom verification to user doc
-   */
-  try {
+    /**
+     * Add Paysafe profile and Intercom verification to user doc
+     */
     await admin.firestore().collection("Users").doc(uid).set(
       {
         paysafeProfileId: profileRequest.data.id,
@@ -88,67 +77,51 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
       },
       { merge: true }
     );
-  } catch (e) {
-    functions.logger.log(e);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Could not save details to user's profile"
-    );
-  }
 
-  /**
-   * Creater user in Hasura
-   */
-  try {
+    /**
+     * Creater user in Hasura
+     */
     await GraphQLClient.request(INSERT_HASURA_USER, {
       userId: uid,
       email,
       role: APPROVED_ADMINS.includes(email) ? "ADMIN" : "USER",
       paysafeId: profileRequest.data.id,
     });
-  } catch (e) {
-    functions.logger.log(e);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Could not create user in our database",
-      e
-    );
-  }
 
-  /**
-   * Setup custom claims
-   */
-   let customClaims = {
-    "https://hasura.io/jwt/claims": {
-      "x-hasura-default-role": "user",
-      "x-hasura-allowed-roles": ["user"],
-      "x-hasura-user-id": uid,
-    },
-  };
-
-  if (APPROVED_ADMINS.includes(email)) {
-    customClaims = {
+    /**
+     * Setup custom claims
+     */
+    let customClaims = {
       "https://hasura.io/jwt/claims": {
-        "x-hasura-default-role": "admin",
-        "x-hasura-allowed-roles": ["user", "manager", "admin"],
+        "x-hasura-default-role": "user",
+        "x-hasura-allowed-roles": ["user"],
         "x-hasura-user-id": uid,
       },
     };
-  }
 
-  // Set claims
-  try {
+    if (APPROVED_ADMINS.includes(email)) {
+      customClaims = {
+        "https://hasura.io/jwt/claims": {
+          "x-hasura-default-role": "admin",
+          "x-hasura-allowed-roles": ["user", "manager", "admin"],
+          "x-hasura-user-id": uid,
+        },
+      };
+    }
+
+    // Set claims
     await admin.auth().setCustomUserClaims(uid, customClaims);
+    return { message: "Successfully added user" };
   } catch (e) {
-    functions.logger.log(e);
+    functions.logger.log(e, {
+      status: e.response && e.response.status,
+      data: e.response && e.response.data,
+      userId: uid,
+    });
     throw new functions.https.HttpsError(
       "internal",
-      "Could not update user claims"
+      "Could not create user",
+      { ct_error_code: "could_not_create_user" }
     );
   }
-
-  return {
-    message: "Successfully added user",
-  };
-
 });
