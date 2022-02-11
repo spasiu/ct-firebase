@@ -17,72 +17,57 @@ const UPDATE_BC_ID = gql`
   }
 `;
 
-exports.createBigCommerceUser = functions.https.onCall(async (data, context) => {
-  authorize(context);
+exports.createBigCommerceUser = functions.https.onCall(
+  async (data, context) => {
+    authorize(context);
 
-  const { first_name, last_name } = data;
+    const { first_name, last_name } = data;
 
-  const uid = context.auth.uid;
-  const email = context.auth.token.email;
+    const uid = context.auth.uid;
+    const email = context.auth.token.email;
 
-  let bcUserRequest;
+    try {
+      const bcCreateUseOptions = {
+        url: `${functions.config().env.bigCommerce.urlV2}/customers`,
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+          "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
+        },
+        data: {
+          email: email,
+          first_name: first_name,
+          last_name: last_name,
+        },
+      };
 
-  const bcCreateUseOptions = {
-    url: `${functions.config().env.bigCommerce.urlV2}/customers`,
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-Auth-Client": functions.config().env.bigCommerce.clientId,
-      "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
-    },
-    data: {
-      email: email,
-      first_name: first_name,
-      last_name: last_name,
-    },
-  };
+      const bcUserRequest = await axios(bcCreateUseOptions);
 
-  try {
-    bcUserRequest = await axios(bcCreateUseOptions);
-  } catch (e) {
-    functions.logger.log(e.response);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Could not create BigCommerce account"
-    );
+      await admin
+        .firestore()
+        .collection("Users")
+        .doc(uid)
+        .set({ bcUserId: bcUserRequest.data.id }, { merge: true });
+
+      await GraphQLClient.request(UPDATE_BC_ID, {
+        userId: uid,
+        bcId: bcUserRequest.data.id,
+      });
+
+      return { message: "Successfully added user" };
+    } catch (e) {
+      functions.logger.log(e, {
+        status: e.response && e.response.status,
+        data: e.response && e.response.data,
+        userId: uid,
+      });
+      throw new functions.https.HttpsError(
+        "internal",
+        "Could not create BigCommerce account",
+        { ct_error_code: "could_not_create_user" }
+      );
+    }
   }
-
-  try {
-    await admin.firestore().collection("Users").doc(uid).set(
-      {
-        bcUserId: bcUserRequest.data.id,
-      },
-      { merge: true }
-    );
-  } catch (e) {
-    functions.logger.log(e.response);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Could not save details to user's profile"
-    );
-  }
-
-  try {
-    await GraphQLClient.request(UPDATE_BC_ID, {
-      userId: uid,
-      bcId: bcUserRequest.data.id,
-    });
-  } catch (e) {
-    functions.logger.log(e);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Could not save details to user's profile in database"
-    );
-  }
-
-  return {
-    message: "Successfully added user",
-  };
-}
 );
