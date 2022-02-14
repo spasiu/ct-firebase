@@ -64,6 +64,7 @@ const INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS = gql`
     insert_Orders_one(object: $orderObject) {
       id
       bc_order_id
+      payment_id
       discount_total
       grand_total
       subtotal
@@ -397,27 +398,6 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     await axios(bcUpdateOrderToPendingOptions);
 
     /**
-     * Create Hasura Order
-     */
-    await GraphQLClient.request(INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS, {
-      orderId: orderId,
-      breakLineItems: breakQueryProductInput,
-      orderObject: {
-        id: orderId,
-        user_id: uid,
-        bc_order_id: bcOrderId,
-        subtotal: bcCartData.subtotal_ex_tax,
-        discount_total: 0,
-        tax_total: bcCartData.tax_total,
-        grand_total: bcCartData.grand_total,
-        shipping_total: bcCartData.shipping_cost_total_ex_tax,
-      },
-    }).catch((e) => {
-      errorLog = e;
-      throw new Error(ERRORS.could_not_create_hasura_order.type);
-    });
-
-    /**
      * Process payment
      */
     if (paymentData) {
@@ -437,6 +417,29 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
       const payment = await axios(psMakePaymentOptions);
       paymentData = payment.data;
     }
+
+    /**
+     * Create Hasura Order
+     */
+    await GraphQLClient.request(INSERT_ORDER_AND_UPDATE_BREAK_PRODUCTS, {
+      orderId: orderId,
+      breakLineItems: breakQueryProductInput,
+      orderObject: {
+        id: orderId,
+        user_id: uid,
+        bc_order_id: bcOrderId,
+        payment_id: paymentData.id,
+        subtotal: bcCartData.subtotal_ex_tax,
+        discount_total: 0,
+        tax_total: bcCartData.tax_total,
+        grand_total: bcCartData.grand_total,
+        shipping_total: bcCartData.shipping_cost_total_ex_tax,
+      },
+    }).catch((e) => {
+      console.log(`REFUND >> user: ${uid}, order: ${orderId}, payment: ${paymentData.id}`)
+      errorLog = e;
+      throw new Error(ERRORS.could_not_create_hasura_order.type);
+    });
 
     /**
      * Follow purchased breaks and events
