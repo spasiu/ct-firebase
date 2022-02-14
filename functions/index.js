@@ -28,12 +28,7 @@ module.exports = {
 
   // Cart
   ...require("./checkout/createCheckout"),
-  ...require("./checkout/addItem"),
-  ...require("./checkout/removeItem"),
-  ...require("./checkout/updateItem"),
-  ...require("./checkout/getCheckout"),
   ...require("./checkout/createOrder"),
-  ...require("./checkout/addAddress"),
   ...require("./checkout/timeoutReservations"),
 
   // Events
