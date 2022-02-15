@@ -9,6 +9,7 @@ const GET_BREAK_DETAILS_FOR_LIVE = gql`
     Breaks_by_pk(id: $id) {
       id
       dataset
+      result
       break_type
       teams_per_spot
       BreakProductItems(where: { order_id: { _is_null:false } }) {
@@ -119,7 +120,7 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
   try {
       await GraphQLClient.request(SET_BREAK_RESULTS_FOR_LIVE, {
         id: breakId,
-        result: users
+        result: breakData.result || users
       });
       return {
         message: "Break started",
