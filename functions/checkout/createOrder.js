@@ -478,7 +478,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
     const appsFlyerOrderLog = {
       af_price: bcCartData.grand_total,
       af_order_id: orderId,
-    }
+    };
     return appsFlyerOrderLog;
   } catch (e) {
     const checkoutError =
