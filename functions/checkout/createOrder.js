@@ -428,7 +428,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
         id: orderId,
         user_id: uid,
         bc_order_id: bcOrderId,
-        payment_id: paymentData.id,
+        payment_id: paymentData && paymentData.id,
         subtotal: bcCartData.subtotal_ex_tax,
         discount_total: 0,
         tax_total: bcCartData.tax_total,
