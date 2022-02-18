@@ -32,5 +32,8 @@ module.exports = {
   ...require("./checkout/timeoutReservations"),
 
   // Events
-  ...require("./events/createEvent")
+  ...require("./events/createEvent"),
+
+  // Update
+  ...require("./update/minimumVersion")
 };

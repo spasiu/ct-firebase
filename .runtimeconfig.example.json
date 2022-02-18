@@ -23,6 +23,12 @@
       "serverToken": "<SERVER TOKEN>",
       "accountId": "<ACCOUNT ID>",
       "url": "<URL>"
+    },
+    "minimumVersion": {
+      "build": "<BUILD_NUMBER>",
+      "major": "<MAJOR>",
+      "minor": "<MINOR>",
+      "appstoreUrl": "<APPSTORE_URL>"
     }
   }
 }
