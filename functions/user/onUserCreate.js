@@ -27,6 +27,22 @@ const INSERT_HASURA_USER = gql`
   }
 `;
 
+const INSERT_USER_PREFS = gql`
+  mutation InsertUserPrefs($userId: String!) {
+    insert_UserPreferences_one(
+      object: {
+        user_id: $userId
+        frequency: ""
+        sports: "{}"
+        pricing: "{}"
+        break_type: "{}"
+      }
+    ) {
+      user_id
+    }
+  }
+`;
+
 exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
   const uid = user.uid;
   const email = user.email;
@@ -86,6 +102,8 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
       role: APPROVED_ADMINS.includes(email) ? "ADMIN" : "USER",
       paysafeId: profileRequest.data.id,
     });
+
+    await GraphQLClient.request(INSERT_USER_PREFS, {userId: uid});
 
     /**
      * Setup custom claims
