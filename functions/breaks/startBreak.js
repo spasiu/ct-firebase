@@ -73,6 +73,15 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError("internal", "No break data found.");
   }
 
+  if (breakType === "PERSONAL") {
+    users = breakData.BreakProductItems.map((item) => ({
+        user_id: item.Order.User.id,
+        username: item.Order.User.username,
+        image: item.Order.User.image,
+        bc_order_id: item.Order.bc_order_id
+      }));
+  }
+
   if (breakType === "HIT_DRAFT") {
     users = await shuffleArray(
       breakData.BreakProductItems.map((item) => ({
