@@ -24,9 +24,9 @@ exports.createBreakProducts = functions.https.onCall((data, context) => {
 
   const hasLineItems =
     breakData.break_type === "PICK_YOUR_TEAM" ||
-    breakData.break_type === "PICK_YOUR_DIVISION"
-      ? true
-      : false;
+    breakData.break_type === "PICK_YOUR_DIVISION";
+
+  console.log(`LINE ITEMS: ${hasLineItems}`)
 
   let variants = [];
 
@@ -38,7 +38,7 @@ exports.createBreakProducts = functions.https.onCall((data, context) => {
       option_values: [
         {
           option_display_name: "Spot",
-          label: hasLineItems ? lineItems[i].value : `Spot ${i + 1}`,
+          label: hasLineItems ? lineItems[i].name : `Spot ${i + 1}`,
         },
       ],
     });
@@ -68,7 +68,7 @@ exports.createBreakProducts = functions.https.onCall((data, context) => {
 
   return axios(bcRequestOptions).then((response) => {
     const products = response.data.data.variants.map((variant, idx) => ({
-      title: hasLineItems ? lineItems[idx].value : `Spot ${idx + 1}`,
+      title: hasLineItems ? lineItems[idx].name : `Spot ${idx + 1}`,
       quantity: 1,
       break_id: breakData.id,
       price: hasLineItems ? variant.price : breakData.price,
