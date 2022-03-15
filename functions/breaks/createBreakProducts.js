@@ -26,8 +26,6 @@ exports.createBreakProducts = functions.https.onCall((data, context) => {
     breakData.break_type === "PICK_YOUR_TEAM" ||
     breakData.break_type === "PICK_YOUR_DIVISION";
 
-  console.log(`LINE ITEMS: ${hasLineItems}`)
-
   let variants = [];
 
   for (let i = 0; i < breakData.spots; i++) {
