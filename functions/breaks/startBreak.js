@@ -119,7 +119,7 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
       username: item.Order.User.username,
       image: item.Order.User.image,
       bc_order_id: item.Order.bc_order_id,
-      items: [item.title],
+      items: [breakData.dataset.find((i) => i.name === item.title)],
     }));
   }
 
