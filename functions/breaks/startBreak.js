@@ -4,14 +4,18 @@ const { gql } = require("graphql-request");
 const GraphQLClient = require("../lib/graphql");
 const authorize = require("../lib/authorization");
 
+
+// TODO: change dataset location to relationship btw Breaks and datasets tables
 const GET_BREAK_DETAILS_FOR_LIVE = gql`
   query GetBreakDetailsForLive($id: uuid!) {
     Breaks_by_pk(id: $id) {
       id
-      dataset
       result
       break_type
       teams_per_spot
+      datasets {
+        data
+      }
       BreakProductItems(where: { order_id: { _is_null:false } }) {
         id
         title
@@ -94,7 +98,7 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
   }
 
   if (breakType === "RANDOM_DIVISION" || breakType === "RANDOM_TEAM") {
-    dataset = await shuffleArray(breakData.dataset);
+    dataset = await shuffleArray(breakData.datasets.data);
 
     users = await shuffleArray(
       breakData.BreakProductItems.map((item) => ({
@@ -119,7 +123,7 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
       username: item.Order.User.username,
       image: item.Order.User.image,
       bc_order_id: item.Order.bc_order_id,
-      items: [breakData.dataset.find((i) => i.name === item.title)],
+      items: [breakData.datasets.data.find((i) => i.name === item.title)],
     }));
   }
 

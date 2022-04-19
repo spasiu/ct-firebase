@@ -19,6 +19,7 @@ module.exports = {
 
   // Breaks
   ...require("./breaks/createBreakProducts"),
+  ...require("./breaks/deleteBreakProducts"),
   ...require("./breaks/startBreak"),
 
   // Notifications
