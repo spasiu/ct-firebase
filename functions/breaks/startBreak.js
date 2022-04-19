@@ -73,6 +73,10 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
   
   if (breakData) {
     breakType = breakData.break_type;
+
+    // Initialize dataset as empty array in case dataset is not present
+    breakData.datasets = breakData.datasets || {};
+    breakData.datasets.data = breakData.datasets.data || [];
   } else {
     throw new functions.https.HttpsError("internal", "No break data found.");
   }
