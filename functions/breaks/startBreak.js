@@ -4,15 +4,19 @@ const { gql } = require("graphql-request");
 const GraphQLClient = require("../lib/graphql");
 const authorize = require("../lib/authorization");
 
+
+// TODO: change dataset location to relationship btw Breaks and datasets tables
 const GET_BREAK_DETAILS_FOR_LIVE = gql`
   query GetBreakDetailsForLive($id: uuid!) {
     Breaks_by_pk(id: $id) {
       id
-      dataset
       result
       break_type
       teams_per_spot
-      BreakProductItems {
+      datasets {
+        data
+      }
+      BreakProductItems(where: { order_id: { _is_null:false } }) {
         id
         title
         Order {
@@ -86,19 +90,22 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
   });
 
   if (breakType === "PERSONAL") users = breakProductItems;
-  if (breakType === "HIT_DRAFT") users = await shuffleArray(breakProductItems);
-  if (breakType === "PICK_YOUR_DIVISION" || breakType === "PICK_YOUR_TEAM") users = breakProductItems
-    .map(item => Object.assign(item, {items: [breakData.datasets.data.find(({ name }) => name === item.title)] }));
-  if (breakType === "RANDOM_DIVISION" || breakType === "RANDOM_TEAM") {
-    dataset = await shuffleArray(breakData.dataset);
-    users = await shuffleArray(breakProductItems);
 
+  if (breakType === "HIT_DRAFT" || breakType === "RANDOM_DIVISION" || breakType === "RANDOM_TEAM") {
+    users = await shuffleArray(breakProductItems);
+  }
+
+  if (breakType === "RANDOM_DIVISION" || breakType === "RANDOM_TEAM") {
+    dataset = await shuffleArray(breakData.datasets.data);
     for (let idx = 0; idx < users.length; idx++) {
       for (let j = 0; j < breakData.teams_per_spot; j++) {
         users[idx].items.push(dataset.shift());
       }
     }
   }
+
+  if (breakType === "PICK_YOUR_DIVISION" || breakType === "PICK_YOUR_TEAM") users = breakProductItems
+      .map(item => Object.assign(item, {items: [breakData.datasets.data.find(({ name }) => name === item.title)] }));
 
   /**
    * Set break randomization results
