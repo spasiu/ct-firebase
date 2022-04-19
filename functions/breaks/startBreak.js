@@ -88,7 +88,7 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
   if (breakType === "PERSONAL") users = breakProductItems;
   if (breakType === "HIT_DRAFT") users = await shuffleArray(breakProductItems);
   if (breakType === "PICK_YOUR_DIVISION" || breakType === "PICK_YOUR_TEAM") users = breakProductItems
-    .map(item => Object.assign(item, {items: [] }));
+    .map(item => Object.assign(item, {items: [breakData.datasets.data.find(({ name }) => name === item.title)] }));
   if (breakType === "RANDOM_DIVISION" || breakType === "RANDOM_TEAM") {
     dataset = await shuffleArray(breakData.dataset);
     users = await shuffleArray(breakProductItems);
