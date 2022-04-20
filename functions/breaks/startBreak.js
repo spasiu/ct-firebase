@@ -77,39 +77,26 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError("internal", "No break data found.");
   }
 
-  if (breakType === "PERSONAL") {
-    users = breakData.BreakProductItems.map((item) => ({
-        user_id: item.Order.User.id,
-        username: item.Order.User.username,
-        image: item.Order.User.image,
-        bc_order_id: item.Order.bc_order_id
-      }));
-  }
+  const breakProductItems =  breakData.BreakProductItems.map(item => {
+    const user = item.Order && item.Order.User && item.Order.User || {};
+    return {
+      bc_order_id: item.Order && item.Order.bc_order_id || "",
+      user_id: user.id || functions.config().env.application.defaultUserId,
+      username: user.username || "cardsandtreasure",
+      image: user.image || functions.config().env.application.defaultUserImage,
+      title: item.title,
+      items: []
+    };
+  });
 
-  if (breakType === "HIT_DRAFT") {
-    users = await shuffleArray(
-      breakData.BreakProductItems.map((item) => ({
-        user_id: item.Order.User.id,
-        username: item.Order.User.username,
-        image: item.Order.User.image,
-        bc_order_id: item.Order.bc_order_id
-      }))
-    );
+  if (breakType === "PERSONAL") users = breakProductItems;
+
+  if (breakType === "HIT_DRAFT" || breakType === "RANDOM_DIVISION" || breakType === "RANDOM_TEAM") {
+    users = await shuffleArray(breakProductItems);
   }
 
   if (breakType === "RANDOM_DIVISION" || breakType === "RANDOM_TEAM") {
     dataset = await shuffleArray(breakData.datasets.data);
-
-    users = await shuffleArray(
-      breakData.BreakProductItems.map((item) => ({
-        user_id: item.Order.User.id,
-        username: item.Order.User.username,
-        image: item.Order.User.image,
-        bc_order_id: item.Order.bc_order_id,
-        items: [],
-      }))
-    );
-
     for (let idx = 0; idx < users.length; idx++) {
       for (let j = 0; j < breakData.teams_per_spot; j++) {
         users[idx].items.push(dataset.shift());
@@ -117,15 +104,8 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
     }
   }
 
-  if (breakType === "PICK_YOUR_DIVISION" || breakType === "PICK_YOUR_TEAM") {
-    users = breakData.BreakProductItems.map((item) => ({
-      user_id: item.Order.User.id,
-      username: item.Order.User.username,
-      image: item.Order.User.image,
-      bc_order_id: item.Order.bc_order_id,
-      items: [breakData.datasets.data.find((i) => i.name === item.title)],
-    }));
-  }
+  if (breakType === "PICK_YOUR_DIVISION" || breakType === "PICK_YOUR_TEAM") users = breakProductItems
+      .map(item => Object.assign(item, {items: [breakData.datasets.data.find(({ name }) => name === item.title)] }));
 
   /**
    * Set break randomization results
