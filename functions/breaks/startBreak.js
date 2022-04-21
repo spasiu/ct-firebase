@@ -16,7 +16,7 @@ const GET_BREAK_DETAILS_FOR_LIVE = gql`
       datasets {
         data
       }
-      BreakProductItems(where: { order_id: { _is_null:false } }) {
+      BreakProductItems {
         id
         title
         Order {
@@ -80,7 +80,7 @@ exports.startBreak = functions.https.onCall(async (data, context) => {
   const breakProductItems =  breakData.BreakProductItems.map(item => {
     const user = item.Order && item.Order.User && item.Order.User || {};
     return {
-      bc_order_id: item.Order && item.Order.bc_order_id || "",
+      bc_order_id: item.Order && item.Order.bc_order_id || -1,
       user_id: user.id || functions.config().env.application.defaultUserId,
       username: user.username || "cardsandtreasure",
       image: user.image || functions.config().env.application.defaultUserImage,
