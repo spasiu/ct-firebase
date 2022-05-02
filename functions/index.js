@@ -11,6 +11,7 @@ module.exports = {
   ...require("./user/onUserDelete"),
   ...require("./user/createBigCommerceUser"),
   ...require("./user/userUpdatePermissions"),
+  ...require("./user/deleteUser"),
 
   // Cards
   ...require("./cards/addCard"),
