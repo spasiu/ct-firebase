@@ -1,5 +1,6 @@
 {
   "projects": {
+    "prod": "ct-prod-77429",
     "default": "candt-admin-dev"
   }
 }
