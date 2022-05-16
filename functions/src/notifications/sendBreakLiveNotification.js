@@ -1,8 +1,8 @@
 const functions = require("firebase-functions");
 const { gql } = require("graphql-request");
-const authorize = require("../lib/authorization");
-const GraphQLClient = require("../lib/graphql");
-const notifier = require("../lib/notification")
+const authorize = require("../services/authorization");
+const GraphQLClient = require("../services/graphql");
+const notifier = require("../services/notification")
 
 
 const GET_BREAK_FOLLOWERS = gql`

@@ -1,7 +1,7 @@
 const functions = require("firebase-functions");
 const moment = require("moment");
 const { gql } = require("graphql-request");
-const GraphQLClient = require("../lib/graphql");
+const GraphQLClient = require("../services/graphql");
 
 const EXPIRE_UNUSED_RESERVATIONS = gql`
   mutation UndoExpiredReservations($cutOff: timestamptz) {

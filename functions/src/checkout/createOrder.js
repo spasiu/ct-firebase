@@ -2,8 +2,8 @@ const functions = require("firebase-functions");
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 const { gql } = require("graphql-request");
-const GraphQLClient = require("../lib/graphql");
-const authorize = require("../lib/authorization");
+const GraphQLClient = require("../services/graphql");
+const authorize = require("../services/authorization");
 
 const GET_BREAK_PRODUCT_ITEMS_FOR_ORDER = gql`
   query GetBreakProductItemsForOrder(
