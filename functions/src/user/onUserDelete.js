@@ -44,32 +44,41 @@ exports.onUserDelete = functions.auth.user().onDelete(async (user) => {
     /**
      * Delete Intercom user
      */
-    let intercomOptions = {
-      url: functions.config().env.intercom.webApiUrl,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${functions.config().env.intercom.webApiKey}`,
-      },
-    };
-
-    const intercomUser = await axios({
-      ...intercomOptions,
-      url: `${intercomOptions.url}/contacts/search}`,
-      data: {
-        query: {
-          field: "external_id",
-          operator: "=",
-          value: uid,
+    try {
+      const intercomOptions = {
+        url: functions.config().env.intercom.webApiUrl,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${functions.config().env.intercom.webApiKey}`,
         },
-      },
-    });
+      };
 
-    await axios({
-      ...intercomOptions,
-      url: `${intercomOptions.url}/user_delete_requests}`,
-      data: { intercom_user_id: intercomUser.data.id },
-    });
+      const intercomUser = await axios({
+        ...intercomOptions,
+        url: `${intercomOptions.url}/contacts/search`,
+        data: {
+          query: {
+            field: "external_id",
+            operator: "=",
+            value: uid,
+          },
+        }, // get first entry in data list for unique user
+      }).then((response) => response.data.data[0]);
+
+      if (intercomUser) {
+        await axios({
+          ...intercomOptions,
+          url: `${intercomOptions.url}/user_delete_requests`,
+          data: { intercom_user_id: intercomUser.id },
+        });
+      }
+      
+    } catch (error) {
+      if (!error.message.includes("404")) {
+        throw error;
+      }
+    }
 
     /**
      * get stored user account info
@@ -81,40 +90,54 @@ exports.onUserDelete = functions.auth.user().onDelete(async (user) => {
     /**
      * Delete Paysafe profile
      */
-    if (userInfo.Users_by_pk.paysafe_user_id) {
-      const psDeleteProfileOptions = {
-        url: `${functions.config().env.paysafe.url}/customervault/v1/profiles/${
-          userInfo.Users_by_pk.paysafe_user_id
-        }`,
-        method: "DELETE",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          Authorization: `Basic ${functions.config().env.paysafe.serverToken}`,
-        },
-      };
+    try {
+      if (userInfo.Users_by_pk.paysafe_user_id) {
+        const psDeleteProfileOptions = {
+          url: `${
+            functions.config().env.paysafe.url
+          }/customervault/v1/profiles/${userInfo.Users_by_pk.paysafe_user_id}`,
+          method: "DELETE",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            Authorization: `Basic ${
+              functions.config().env.paysafe.serverToken
+            }`,
+          },
+        };
 
-      await axios(psDeleteProfileOptions);
+        await axios(psDeleteProfileOptions);
+      }
+    } catch (error) {
+      if (!error.message.includes("404")) {
+        throw error;
+      }
     }
 
     /**
      * Delete BC user
      */
-    if (userInfo.Users_by_pk.bc_user_id) {
-      const bcDeleteUserOptions = {
-        url: `${functions.config().env.bigCommerce.url}/customers?id:in=${
-          userInfo.Users_by_pk.bc_user_id
-        }`,
-        method: "DELETE",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "X-Auth-Client": functions.config().env.bigCommerce.clientId,
-          "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
-        },
-      };
+    try {
+      if (userInfo.Users_by_pk.bc_user_id) {
+        const bcDeleteUserOptions = {
+          url: `${functions.config().env.bigCommerce.url}/customers?id:in=${
+            userInfo.Users_by_pk.bc_user_id
+          }`,
+          method: "DELETE",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+            "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
+          },
+        };
 
-      await axios(bcDeleteUserOptions);
+        await axios(bcDeleteUserOptions);
+      }
+    } catch (error) {
+      if (!error.message.includes("404")) {
+        throw error;
+      }
     }
 
     /**
@@ -130,7 +153,6 @@ exports.onUserDelete = functions.auth.user().onDelete(async (user) => {
     return {
       message: "Successfully removed user",
     };
-
   } catch (error) {
     functions.logger.error(error);
   }
