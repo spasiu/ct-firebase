@@ -1,8 +1,8 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const { gql } = require("graphql-request");
-const GraphQLClient = require("../lib/graphql");
-const authorize = require("../lib/authorization");
+const GraphQLClient = require("../services/graphql");
+const authorize = require("../services/authorization");
 
 const UPDATE_USER = gql`
   mutation UpdateUserPermissions($id: String!, $data: Users_set_input!) {

@@ -1,8 +1,8 @@
 const functions = require("firebase-functions");
 const axios = require("axios");
 const { gql } = require("graphql-request");
-const GraphQLClient = require("../lib/graphql");
-const authorize = require("../lib/authorization");
+const GraphQLClient = require("../services/graphql");
+const authorize = require("../services/authorization");
 
 // TODO: Move BC config to env vars
 // TODO: Verify admin/manager/breaker

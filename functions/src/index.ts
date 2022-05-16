@@ -2,9 +2,6 @@ const admin = require("firebase-admin");
 
 admin.initializeApp();
 
-/**
- * TODO: Use GraphQL Client
- */
 module.exports = {
   // User
   ...require("./user/onUserCreate"),

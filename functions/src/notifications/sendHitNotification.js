@@ -1,6 +1,6 @@
 const functions = require("firebase-functions");
-const authorize = require("../lib/authorization");
-const notifier = require("../lib/notification")
+const authorize = require("../services/authorization");
+const notifier = require("../services/notification")
 
 
 exports.sendHitNotification = functions.https.onCall(async (data, context) => {

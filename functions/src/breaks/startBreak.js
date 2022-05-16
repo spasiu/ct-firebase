@@ -1,8 +1,8 @@
 const functions = require("firebase-functions");
 const shuffleArray = require("../utils/shuffleArray");
 const { gql } = require("graphql-request");
-const GraphQLClient = require("../lib/graphql");
-const authorize = require("../lib/authorization");
+const GraphQLClient = require("../services/graphql");
+const authorize = require("../services/authorization");
 
 
 // TODO: change dataset location to relationship btw Breaks and datasets tables
