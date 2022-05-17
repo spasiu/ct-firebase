@@ -6,7 +6,7 @@ const { gql } = require("graphql-request");
 const GraphQLClient = require("../services/graphql");
 
 const GET_USER_INFO = gql`
-  query GetUserPaysafeId($userId: String!) {
+  query GetUserInfo($userId: String!) {
     Users_by_pk(id: $userId) {
       bc_user_id
       paysafe_user_id
@@ -40,82 +40,120 @@ const REMOVE_HASURA_USER = gql`
 exports.onUserDelete = functions.auth.user().onDelete(async (user) => {
   const uid = user.uid;
 
-  let userInfo;
-
   try {
-    userInfo = await GraphQLClient.request(GET_USER_INFO, {
-      userId: uid,
-    });
-  } catch (error) {
-    functions.logger.log(error);
-  }
-
-  /**
-   * Delete Paysafe profile
-   */
-  if (userInfo.Users_by_pk.paysafe_user_id) {
-    const psDeleteProfileOptions = {
-      url: `${functions.config().env.paysafe.url}/customervault/v1/profiles/${
-        userInfo.Users_by_pk.paysafe_user_id
-      }`,
-      method: "DELETE",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Authorization: `Basic ${functions.config().env.paysafe.serverToken}`,
-      },
-    };
-
+    /**
+     * Delete Intercom user
+     */
     try {
-      await axios(psDeleteProfileOptions);
-    } catch (error) {
-      functions.logger.log(error.response.data);
-    }
-  }
+      const intercomOptions = {
+        url: functions.config().env.intercom.webApiUrl,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${functions.config().env.intercom.webApiKey}`,
+        },
+      };
 
-  /**
-   * Delete BC user
-   */
-  if (userInfo.Users_by_pk.bc_user_id) {
-    const bcDeleteUserOptions = {
-      url: `${functions.config().env.bigCommerce.url}/customers?id:in=${
-        userInfo.Users_by_pk.bc_user_id
-      }`,
-      method: "DELETE",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "X-Auth-Client": functions.config().env.bigCommerce.clientId,
-        "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
-      },
-    };
+      const intercomUser = await axios({
+        ...intercomOptions,
+        url: `${intercomOptions.url}/contacts/search`,
+        data: {
+          query: {
+            field: "external_id",
+            operator: "=",
+            value: uid,
+          },
+        }, // get first entry in data list for unique user
+      }).then((response) => response.data.data[0]);
 
-    try {
-      await axios(bcDeleteUserOptions);
+      if (intercomUser) {
+        await axios({
+          ...intercomOptions,
+          url: `${intercomOptions.url}/user_delete_requests`,
+          data: { intercom_user_id: intercomUser.id },
+        });
+      }
+      
     } catch (error) {
-      functions.logger.log(error.response.data);
+      if (!error.message.includes("404")) {
+        throw error;
+      }
     }
-  }
 
     /**
-   * Delete user in firestore
-   */
-     try {
-      await admin.firestore().collection("Users").doc(uid).delete();
-    } catch (e) {
-      functions.logger.warn("Could not delete user from Firestore:", e);
+     * get stored user account info
+     */
+    const userInfo = await GraphQLClient.request(GET_USER_INFO, {
+      userId: uid,
+    });
+
+    /**
+     * Delete Paysafe profile
+     */
+    try {
+      if (userInfo.Users_by_pk.paysafe_user_id) {
+        const psDeleteProfileOptions = {
+          url: `${
+            functions.config().env.paysafe.url
+          }/customervault/v1/profiles/${userInfo.Users_by_pk.paysafe_user_id}`,
+          method: "DELETE",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            Authorization: `Basic ${
+              functions.config().env.paysafe.serverToken
+            }`,
+          },
+        };
+
+        await axios(psDeleteProfileOptions);
+      }
+    } catch (error) {
+      if (!error.message.includes("404")) {
+        throw error;
+      }
     }
 
-  /**
-   * Remove user from Hasura
-   */
-  try {
-    await GraphQLClient.request(REMOVE_HASURA_USER, { userId: uid });
-  } catch (error) {
-    functions.logger.log(error.response.data);
-  }
+    /**
+     * Delete BC user
+     */
+    try {
+      if (userInfo.Users_by_pk.bc_user_id) {
+        const bcDeleteUserOptions = {
+          url: `${functions.config().env.bigCommerce.url}/customers?id:in=${
+            userInfo.Users_by_pk.bc_user_id
+          }`,
+          method: "DELETE",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "X-Auth-Client": functions.config().env.bigCommerce.clientId,
+            "X-Auth-Token": functions.config().env.bigCommerce.accessToken,
+          },
+        };
 
-  return {
-    message: "Successfully removed user",
-  };
+        await axios(bcDeleteUserOptions);
+      }
+    } catch (error) {
+      if (!error.message.includes("404")) {
+        throw error;
+      }
+    }
+
+    /**
+     * Delete user in firestore
+     */
+    await admin.firestore().collection("Users").doc(uid).delete();
+
+    /**
+     * Remove user from Hasura
+     */
+    await GraphQLClient.request(REMOVE_HASURA_USER, { userId: uid });
+
+    return {
+      message: "Successfully removed user",
+    };
+  } catch (error) {
+    functions.logger.error(error);
+  }
 });

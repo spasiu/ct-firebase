@@ -4,7 +4,7 @@ const axios = require("axios");
 const notifier = (data) => {
     data.forEach(d => {
         const intercomNotificationOptions = {
-            url: functions.config().env.intercom.webApiUrl,
+            url: functions.config().env.intercom.webApiUrl + "/events",
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
